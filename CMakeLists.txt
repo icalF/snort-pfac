@@ -1,6 +1,6 @@
 cmake_minimum_required (VERSION 3.9)
 project ("PFAC-CUDA" LANGUAGES CXX CUDA)
- 
+
 add_executable(pfac icalcu.cu kernel.cu)
 
 # particles will also build with -std=c++11

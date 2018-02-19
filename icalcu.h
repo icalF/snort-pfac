@@ -1,3 +1,6 @@
 #include <cuda.h>
+#include <cstdio>
 
-extern __global__ void hello(void);
+#define THREADS 1024 
+#define BLOCKS 32768 
+#define NUM_VALS (THREADS*BLOCKS)
