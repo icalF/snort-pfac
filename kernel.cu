@@ -3,54 +3,75 @@
 #include <cuda.h>
 #include "icalcu.h"
 
-__global__ void sort(int* a, int start, int end, bool up);
-__global__ void merge(int* a, int start, int end, bool up);
-
-__global__ void sort(int* a, int start, int end, bool up)
+__global__ void reduce (ptr_int gd)
 {
-    int id = threadIdx.x + blockDim.x * blockIdx.x;
-    if (id != start + end || end - start < 2) {
-        return;
+    __shared__ int sdata[BLOCKS];
+
+    unsigned tid = threadIdx.x;
+    unsigned id = tid + (2 * blockDim.x) * blockIdx.x;        // halve the blocks
+    sdata[tid] = (gd[id] | gd[id + blockDim.x]);              // first level reduction
+    __syncthreads();
+
+    for (unsigned s = blockDim.x / 2; s > 0; s >>= 1)
+    {
+        if (tid < s)
+        {
+            sdata[tid] |= sdata[tid + s];
+        }
+        __syncthreads();
     }
 
-    if (end - start == 2) {
-        if (up && a[start] > a[start+1]) {
-            a[start] ^= a[start+1] ^= a[start] ^= a[start+1];
-        }
-        if (!up && a[start] < a[start+1]) {
-            a[start] ^= a[start+1] ^= a[start] ^= a[start+1];
-        }
-        cudaDeviceSynchronize();
-    } else {
-        int mid = (start + end) / 2;
-        sort<<<BLOCKS, THREADS>>>(a, start, mid, up);
-        sort<<<BLOCKS, THREADS>>>(a, mid, end, !up);
-        merge<<<BLOCKS, THREADS>>>(a, start, end, up);
+    if (tid == 0) 
+    {
+        gd[blockIdx.x] = sdata[0];
     }
 }
-__global__ void merge(int* a, int start, int end, bool up)
-{
-    int id = threadIdx.x + blockDim.x * blockIdx.x;
-    if (id != start + end || end - start < 2) {
-        return;
-    } else {
-        int mid = (start + end) / 2;
 
-        for(int i = 0; i + start < mid && i + mid < end; i++) {
-            if (up && a[i+start] > a[i+mid]) {
-                a[i+start] ^= a[i+mid] ^= a[i+start] ^= a[i+mid];
-            }
-            if (!up && a[i+start] < a[i+mid]) {
-                a[i+start] ^= a[i+mid] ^= a[i+start] ^= a[i+mid];
-            }
-        }
+// __global__ void sort(int* a, int start, int end, bool up)
+// {
+//     int id = threadIdx.x + blockDim.x * blockIdx.x;
+//     if (id != start + end || end - start < 2) {
+//         return;
+//     }
 
-        cudaDeviceSynchronize();
+//     if (end - start == 2) {
+//         if (up && a[start] > a[start+1]) {
+//             a[start] ^= a[start+1] ^= a[start] ^= a[start+1];
+//         }
+//         if (!up && a[start] < a[start+1]) {
+//             a[start] ^= a[start+1] ^= a[start] ^= a[start+1];
+//         }
+//         cudaDeviceSynchronize();
+//     } else {
+//         int mid = (start + end) / 2;
+//         sort<<<BLOCKS, THREADS>>>(a, start, mid, up);
+//         sort<<<BLOCKS, THREADS>>>(a, mid, end, !up);
+//         merge<<<BLOCKS, THREADS>>>(a, start, end, up);
+//     }
+// }
+// __global__ void merge(int* a, int start, int end, bool up)
+// {
+//     int id = threadIdx.x + blockDim.x * blockIdx.x;
+//     if (id != start + end || end - start < 2) {
+//         return;
+//     } else {
+//         int mid = (start + end) / 2;
 
-        merge<<<BLOCKS, THREADS>>>(a, start, mid, up);
-        merge<<<BLOCKS, THREADS>>>(a, mid, end, !up);
-    }
-}
+//         for(int i = 0; i + start < mid && i + mid < end; i++) {
+//             if (up && a[i+start] > a[i+mid]) {
+//                 a[i+start] ^= a[i+mid] ^= a[i+start] ^= a[i+mid];
+//             }
+//             if (!up && a[i+start] < a[i+mid]) {
+//                 a[i+start] ^= a[i+mid] ^= a[i+start] ^= a[i+mid];
+//             }
+//         }
+
+//         cudaDeviceSynchronize();
+
+//         merge<<<BLOCKS, THREADS>>>(a, start, mid, up);
+//         merge<<<BLOCKS, THREADS>>>(a, mid, end, !up);
+//     }
+// }
 
 // #include "spfac_vars.h"
 

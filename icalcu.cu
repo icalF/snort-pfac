@@ -1,39 +1,59 @@
 #include "icalcu.h"
 #include <cuda.h>
 
-typedef int *ptr_int;
-
-extern __global__ void sort(int* a, int start, int end, bool up);
-extern __global__ void merge(int* a, int start, int end, bool up);
-
 int main(int argc, char **argv) 
 {
     ptr_int h_array, d_array;
-    int n;
+    int n = NUM_VALS;
 
-    scanf("%d",&n);
+    int err;
+
+    // scanf("%d",&n);
     
     h_array = (ptr_int) malloc(n * sizeof(int));
-    cudaMalloc(&d_array, n * sizeof(int));
+    err = cudaMalloc(&d_array, n * sizeof(int));
+
+    if (err) {
+        puts("BEGIN");
+        return 0;
+    }
 
     for(int i = 0; i < n; i++) 
     {
-        h_array[i] = rand() % 200 + 1;
-        printf("%d ", h_array[i]);
+        h_array[i] = 0;        // rand() % 2;
     }
-    puts("");
+    h_array[rand() % NUM_VALS] = 1;
 
-    cudaMemcpy(d_array, h_array, n * sizeof(int), cudaMemcpyHostToDevice);
+    err = cudaMemcpy(d_array, h_array, n * sizeof(int), cudaMemcpyHostToDevice);
 
-    sort<<<BLOCKS, THREADS>>>(d_array, 0, n, true);
-
-    cudaMemcpy(h_array, d_array, n * sizeof(int), cudaMemcpyDeviceToHost);
-
-    for(int i = 0; i < n; i++) 
-    {
-        printf("%d ", h_array[i]);
+    if (err) {
+        puts("COPY");
+        cudaFree(d_array);
+        return 0;
     }
-    puts("");
+
+    reduce<<<BLOCKS, THREADS, SHM_SIZE>>>(d_array);
+    err = cudaDeviceSynchronize();
+
+    if (err) {
+        puts("SYNC");
+        printf("%d\n", err);
+        cudaFree(d_array);
+        return 0;
+    }
+
+    reduce<<<1, THREADS, SHM_SIZE>>>(d_array);
+
+    err = cudaMemcpy(h_array, d_array, n * sizeof(int), cudaMemcpyDeviceToHost);
+
+    if (err) {
+        puts("CPBK");
+        printf("%d\n", err);
+        cudaFree(d_array);
+        return 0;
+    }
+
+    puts(h_array[0] ? "TRUE" : "False");
 
     cudaFree(d_array);
     free(h_array);    
