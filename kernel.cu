@@ -1,5 +1,5 @@
-#include <cstdio>
-#include <cstdlib>
+// #include <cstdio>
+// #include <cstdlib>
 #include <cuda.h>
 #include "icalcu.h"
 

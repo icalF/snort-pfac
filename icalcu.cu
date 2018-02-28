@@ -5,18 +5,12 @@ int main(int argc, char **argv)
 {
     ptr_int h_array, d_array;
     int n = NUM_VALS;
-
     int err;
 
     // scanf("%d",&n);
     
     h_array = (ptr_int) malloc(n * sizeof(int));
-    err = cudaMalloc(&d_array, n * sizeof(int));
-
-    if (err) {
-        puts("BEGIN");
-        return 0;
-    }
+    HANDLE_ERROR( cudaMalloc(&d_array, n * sizeof(int)) );
 
     for(int i = 0; i < n; i++) 
     {
@@ -24,34 +18,23 @@ int main(int argc, char **argv)
     }
     h_array[rand() % NUM_VALS] = 1;
 
-    err = cudaMemcpy(d_array, h_array, n * sizeof(int), cudaMemcpyHostToDevice);
+    HANDLE_ERROR( cudaMemcpy(d_array, h_array, n * sizeof(int), cudaMemcpyHostToDevice) );
 
-    if (err) {
-        puts("COPY");
-        cudaFree(d_array);
-        return 0;
-    }
+    HANDLE_ERROR( cudaEventCreate(&start) );
+    HANDLE_ERROR( cudaEventCreate(&stop) );
+    HANDLE_ERROR( cudaEventRecord(start, 0) );
 
     reduce<<<BLOCKS, THREADS, SHM_SIZE>>>(d_array);
-    err = cudaDeviceSynchronize();
+    HANDLE_ERROR( cudaDeviceSynchronize() );
 
-    if (err) {
-        puts("SYNC");
-        printf("%d\n", err);
-        cudaFree(d_array);
-        return 0;
-    }
+    HANDLE_ERROR( cudaEventRecord(stop, 0) );
+    HANDLE_ERROR( cudaEventSynchronize(stop) );
+    HANDLE_ERROR( cudaEventElapsedTime(&time, start, stop) );
 
     reduce<<<1, THREADS, SHM_SIZE>>>(d_array);
+    HANDLE_ERROR( cudaDeviceSynchronize() );
 
-    err = cudaMemcpy(h_array, d_array, n * sizeof(int), cudaMemcpyDeviceToHost);
-
-    if (err) {
-        puts("CPBK");
-        printf("%d\n", err);
-        cudaFree(d_array);
-        return 0;
-    }
+    HANDLE_ERROR( cudaMemcpy(h_array, d_array, n * sizeof(int), cudaMemcpyDeviceToHost) );
 
     puts(h_array[0] ? "TRUE" : "False");
 
