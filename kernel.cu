@@ -3,28 +3,86 @@
 #include <cuda.h>
 #include "icalcu.h"
 
-__global__ void reduce (ptr_int gd)
+// __global__ void reduce (ptr_int gd)
+// {
+//     __shared__ int sdata[THREADS];
+
+//     unsigned tid = threadIdx.x;
+//     unsigned id = tid + (2 * blockDim.x) * blockIdx.x;        // halve the blocks
+//     sdata[tid] = (gd[id] | gd[id + blockDim.x]);              // first level reduction
+//     __syncthreads();
+
+//     for (unsigned s = blockDim.x / 2; s > 0; s >>= 1)
+//     {
+//         if (tid < s)
+//         {
+//             sdata[tid] |= sdata[tid + s];
+//         }
+//         __syncthreads();
+//     }
+
+//     if (tid == 0) 
+//     {
+//         gd[blockIdx.x] = sdata[0];
+//     }
+// }
+
+__global__ void sort (ptr_int data)
 {
-    __shared__ int sdata[BLOCKS];
+    __shared__ int sdata[THREADS];
+    
+    unsigned id = threadIdx.x;
+    unsigned len = blockDim.x;
+    unsigned gid = id + len * blockIdx.x;
+    sdata[id] = data[gid];
 
-    unsigned tid = threadIdx.x;
-    unsigned id = tid + (2 * blockDim.x) * blockIdx.x;        // halve the blocks
-    sdata[tid] = (gd[id] | gd[id + blockDim.x]);              // first level reduction
-    __syncthreads();
-
-    for (unsigned s = blockDim.x / 2; s > 0; s >>= 1)
+    for (int block = 2; block <= len; block <<= 1)
     {
-        if (tid < s)
-        {
-            sdata[tid] |= sdata[tid + s];
+        /* Aligning */
+        if (blockHalves(id, block))
+        {            
+            int prevOffset = (id & ~(block - 1));
+            int nextOffset = prevOffset + block;
+            printf("%d %d\n", id, nextOffset + prevOffset - id - 1);
+            // sorter(data[id], data[len - id - 1]);
         }
         __syncthreads();
+        // cudaDeviceSynchronize();
+
+        /* Swapper */
+        for (int innerBlock = block >> 1; innerBlock > 1; innerBlock >>= 1)
+        {
+            if (blockHalves(id, innerBlock))
+            {
+                int stride = innerBlock >> 1;  // = half
+                printf("%d %d\n", id, id + stride);
+            }
+            __syncthreads();
+            // cudaDeviceSynchronize();
+        }
     }
 
-    if (tid == 0) 
-    {
-        gd[blockIdx.x] = sdata[0];
-    }
+    data[gid] = sdata[id];
+    __syncthreads();
+}
+
+__device__ __forceinline__ bool blockHalves (int id, int blockSize)
+{
+    int mask = blockSize - 1;
+    int reductor = (blockSize >> 1);
+    return ((( id & mask ) & reductor ) == 0 );
+}
+
+__device__ void sorter (int& a, int& b)
+{
+    int _a = a;
+    int _b = b;
+
+    if (a <= b) return;
+    
+    _a ^= _b ^= _a ^= _b;
+    a = _a;
+    b = _b;
 }
 
 // __global__ void sort(int* a, int start, int end, bool up)

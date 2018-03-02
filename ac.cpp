@@ -3,7 +3,11 @@
 //          http://dx.doi.org/10.1145/360825.360855          //
 ///////////////////////////////////////////////////////////////
 
-#include <bits/stdc++.h>
+#include <string>
+#include <vector>
+#include <iostream>
+#include <queue>
+#include <cstdlib>
 
 using namespace std;
 
@@ -75,7 +79,7 @@ int buildMatchingMachine(const vector<string> &words,
     // Iterate over every possible input
     for (int c = 0; c <= highestChar - lowestChar; ++c) {
         // All nodes s of depth 1 have f[s] = 0
-        if (g[0][c] != -1 and g[0][c] != 0) {
+        if (g[0][c] != -1 && g[0][c] != 0) {
             f[g[0][c]] = 0;
             q.push(g[0][c]);
         }
