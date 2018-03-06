@@ -27,9 +27,47 @@
 //     }
 // }
 
-__global__ void sort (ptr_int data)
+__global__ void globalAlign (ptr_int data, int blockSize)
 {
-    __shared__ int sdata[THREADS];
+    unsigned id = threadIdx.x + blockDim.x * blockIdx.x;
+    if (blockHalves(id, blockSize))
+    {            
+        int prevOffset = (id & ~(blockSize - 1));
+        int nextOffset = prevOffset + blockSize;
+        sorter(data[id], data[nextOffset + prevOffset - id - 1]);
+    }
+}
+
+__global__ void localMerge (ptr_int data, int blockSize)
+{
+    extern __shared__ int sdata[];
+
+    unsigned id = threadIdx.x;
+    unsigned gid = id + blockDim.x * blockIdx.x;
+    sdata[id] = data[gid];
+
+    if (blockHalves(id, blockSize))
+    {
+        int stride = blockSize >> 1;  // = half
+        sorter(sdata[id], sdata[id + stride]);
+    }
+    
+    data[gid] = sdata[id];
+}
+
+__global__ void globalMerge (ptr_int data, int blockSize)
+{
+    unsigned id = threadIdx.x + blockDim.x * blockIdx.x;
+    if (blockHalves(id, blockSize))
+    {
+        int stride = blockSize >> 1;  // = half
+        sorter(data[id], data[id + stride]);
+    }
+}
+
+__global__ void localSort (ptr_int data)
+{
+    extern __shared__ int sdata[];
     
     unsigned id = threadIdx.x;
     unsigned len = blockDim.x;
@@ -43,27 +81,23 @@ __global__ void sort (ptr_int data)
         {            
             int prevOffset = (id & ~(block - 1));
             int nextOffset = prevOffset + block;
-            printf("%d %d\n", id, nextOffset + prevOffset - id - 1);
-            // sorter(data[id], data[len - id - 1]);
+            sorter(sdata[id], sdata[nextOffset + prevOffset - id - 1]);
         }
         __syncthreads();
-        // cudaDeviceSynchronize();
 
-        /* Swapper */
+        /* Merging */
         for (int innerBlock = block >> 1; innerBlock > 1; innerBlock >>= 1)
         {
             if (blockHalves(id, innerBlock))
             {
                 int stride = innerBlock >> 1;  // = half
-                printf("%d %d\n", id, id + stride);
+                sorter(sdata[id], sdata[id + stride]);
             }
             __syncthreads();
-            // cudaDeviceSynchronize();
         }
     }
 
     data[gid] = sdata[id];
-    __syncthreads();
 }
 
 __device__ __forceinline__ bool blockHalves (int id, int blockSize)
