@@ -38,7 +38,7 @@ __global__ void globalAlign (ptr_int data, int blockSize)
     }
 }
 
-__global__ void localMerge (ptr_int data, int blockSize)
+__global__ void localMerge (ptr_int data)
 {
     extern __shared__ int sdata[];
 
@@ -46,10 +46,14 @@ __global__ void localMerge (ptr_int data, int blockSize)
     unsigned gid = id + blockDim.x * blockIdx.x;
     sdata[id] = data[gid];
 
-    if (blockHalves(id, blockSize))
+    for (int innerBlock = THREADS; innerBlock > 1; innerBlock >>= 1)
     {
-        int stride = blockSize >> 1;  // = half
-        sorter(sdata[id], sdata[id + stride]);
+        if (blockHalves(id, innerBlock))
+        {
+            int stride = innerBlock >> 1;  // = half
+            sorter(sdata[id], sdata[id + stride]);
+        }
+        __syncthreads();
     }
     
     data[gid] = sdata[id];
@@ -70,11 +74,10 @@ __global__ void localSort (ptr_int data)
     extern __shared__ int sdata[];
     
     unsigned id = threadIdx.x;
-    unsigned len = blockDim.x;
-    unsigned gid = id + len * blockIdx.x;
+    unsigned gid = id + blockDim.x * blockIdx.x;
     sdata[id] = data[gid];
 
-    for (int block = 2; block <= len; block <<= 1)
+    for (int block = 2; block <= THREADS; block <<= 1)
     {
         /* Aligning */
         if (blockHalves(id, block))
@@ -82,6 +85,7 @@ __global__ void localSort (ptr_int data)
             int prevOffset = (id & ~(block - 1));
             int nextOffset = prevOffset + block;
             sorter(sdata[id], sdata[nextOffset + prevOffset - id - 1]);
+            // printf("%d\n", nextOffset + prevOffset - id - 1);
         }
         __syncthreads();
 
@@ -96,6 +100,7 @@ __global__ void localSort (ptr_int data)
             __syncthreads();
         }
     }
+    __syncthreads();
 
     data[gid] = sdata[id];
 }
