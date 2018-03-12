@@ -60,10 +60,10 @@ int main(int argc, char **argv)
 
     HANDLE_ERROR( cudaMemcpy(h_array, d_array, n * sizeof(int), cudaMemcpyDeviceToHost) );
 
-    // for(int i = 0; i < n; i++) 
-    // {
-    //     printf("%d ", h_array[i]);
-    // }
+    for(int i = 0; i < n; i++) 
+    {
+        printf("%d ", h_array[i]);
+    }
     // puts(h_array[0] ? "TRUE" : "False");
     
     cudaFree(d_array);
@@ -83,20 +83,16 @@ void sort (ptr_int data, int len)
 
     for (int block = THREADS << 1; block <= len; block <<= 1)
     {
-        /* Aligning */
-        globalAlign<<<BLOCKS, THREADS>>>(data, block);
-        HANDLE_ERROR( cudaDeviceSynchronize() );
-
         /* Global merging */
-        for (int innerBlock = block >> 1; innerBlock > THREADS; innerBlock >>= 1)
-        {
-            globalMerge<<<BLOCKS, THREADS>>>(data, innerBlock);          
-            HANDLE_ERROR( cudaDeviceSynchronize() );
-        }
+        // for (int innerBlock = block; innerBlock > THREADS; innerBlock >>= 1)
+        // {
+        //     globalMerge<<<BLOCKS, THREADS>>>(data, innerBlock, block);          
+        //     HANDLE_ERROR( cudaDeviceSynchronize() );
+        // }
 
-        /* Local merging */        
-        localMerge<<<BLOCKS, THREADS, SHM_SIZE>>>(data);
-        HANDLE_ERROR( cudaDeviceSynchronize() );
+        // /* Local merging */        
+        // localMerge<<<BLOCKS, THREADS, SHM_SIZE>>>(data, block);
+        // HANDLE_ERROR( cudaDeviceSynchronize() );
     }
     
     HANDLE_ERROR( cudaEventRecord(stop, 0) );

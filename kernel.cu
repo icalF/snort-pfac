@@ -27,18 +27,7 @@
 //     }
 // }
 
-__global__ void globalAlign (ptr_int data, int blockSize)
-{
-    unsigned id = threadIdx.x + blockDim.x * blockIdx.x;
-    if (blockHalves(id, blockSize))
-    {            
-        int prevOffset = (id & ~(blockSize - 1));
-        int nextOffset = prevOffset + blockSize;
-        sorter(data[id], data[nextOffset + prevOffset - id - 1]);
-    }
-}
-
-__global__ void localMerge (ptr_int data)
+__global__ void localMerge (ptr_int data, int superBlock)
 {
     extern __shared__ int sdata[];
 
@@ -46,12 +35,14 @@ __global__ void localMerge (ptr_int data)
     unsigned gid = id + blockDim.x * blockIdx.x;
     sdata[id] = data[gid];
 
+    #pragma unroll(64)
     for (int innerBlock = THREADS; innerBlock > 1; innerBlock >>= 1)
     {
-        if (blockHalves(id, innerBlock))
+        unsigned stride = innerBlock >> 1;  // = half
+        unsigned idx = id + id / stride * stride;
+        if (idx < THREADS)
         {
-            int stride = innerBlock >> 1;  // = half
-            sorter(sdata[id], sdata[id + stride]);
+            sorter(sdata[idx], sdata[idx + stride], gid & (superBlock >> 1));
         }
         __syncthreads();
     }
@@ -59,13 +50,14 @@ __global__ void localMerge (ptr_int data)
     data[gid] = sdata[id];
 }
 
-__global__ void globalMerge (ptr_int data, int blockSize)
+__global__ void globalMerge (ptr_int data, int blockSize, int superBlock)
 {
     unsigned id = threadIdx.x + blockDim.x * blockIdx.x;
-    if (blockHalves(id, blockSize))
+    unsigned stride = blockSize >> 1;  // = half
+    unsigned idx = id + id / stride * stride;
+    if (idx < NUM_VALS)
     {
-        int stride = blockSize >> 1;  // = half
-        sorter(data[id], data[id + stride]);
+        sorter(data[idx], data[idx + stride], id & (superBlock >> 1));
     }
 }
 
@@ -77,25 +69,18 @@ __global__ void localSort (ptr_int data)
     unsigned gid = id + blockDim.x * blockIdx.x;
     sdata[id] = data[gid];
 
+    #pragma unroll(64)
     for (int block = 2; block <= THREADS; block <<= 1)
     {
-        /* Aligning */
-        if (blockHalves(id, block))
-        {            
-            int prevOffset = (id & ~(block - 1));
-            int nextOffset = prevOffset + block;
-            sorter(sdata[id], sdata[nextOffset + prevOffset - id - 1]);
-            // printf("%d\n", nextOffset + prevOffset - id - 1);
-        }
-        __syncthreads();
-
         /* Merging */
-        for (int innerBlock = block >> 1; innerBlock > 1; innerBlock >>= 1)
+        for (int innerBlock = block; innerBlock > 1; innerBlock >>= 1)
         {
-            if (blockHalves(id, innerBlock))
+            unsigned stride = innerBlock >> 1;  // = half
+            unsigned idx = id + id / stride * stride;
+            if (idx < THREADS)
             {
-                int stride = innerBlock >> 1;  // = half
-                sorter(sdata[id], sdata[id + stride]);
+                printf("%d %d %d\n", gid, idx, gid & (block >> 1));
+                sorter(sdata[idx], sdata[idx + stride], gid & (block >> 1));
             }
             __syncthreads();
         }
@@ -105,70 +90,18 @@ __global__ void localSort (ptr_int data)
     data[gid] = sdata[id];
 }
 
-__device__ __forceinline__ bool blockHalves (int id, int blockSize)
-{
-    int mask = blockSize - 1;
-    int reductor = (blockSize >> 1);
-    return ((( id & mask ) & reductor ) == 0 );
-}
-
-__device__ void sorter (int& a, int& b)
+__device__ __forceinline__ void sorter (int& a, int& b, int desc)
 {
     int _a = a;
     int _b = b;
 
-    if (a <= b) return;
+    if ((!desc && a <= b) || (desc && a >= b)) 
+        return;
     
     _a ^= _b ^= _a ^= _b;
     a = _a;
     b = _b;
 }
-
-// __global__ void sort(int* a, int start, int end, bool up)
-// {
-//     int id = threadIdx.x + blockDim.x * blockIdx.x;
-//     if (id != start + end || end - start < 2) {
-//         return;
-//     }
-
-//     if (end - start == 2) {
-//         if (up && a[start] > a[start+1]) {
-//             a[start] ^= a[start+1] ^= a[start] ^= a[start+1];
-//         }
-//         if (!up && a[start] < a[start+1]) {
-//             a[start] ^= a[start+1] ^= a[start] ^= a[start+1];
-//         }
-//         cudaDeviceSynchronize();
-//     } else {
-//         int mid = (start + end) / 2;
-//         sort<<<BLOCKS, THREADS>>>(a, start, mid, up);
-//         sort<<<BLOCKS, THREADS>>>(a, mid, end, !up);
-//         merge<<<BLOCKS, THREADS>>>(a, start, end, up);
-//     }
-// }
-// __global__ void merge(int* a, int start, int end, bool up)
-// {
-//     int id = threadIdx.x + blockDim.x * blockIdx.x;
-//     if (id != start + end || end - start < 2) {
-//         return;
-//     } else {
-//         int mid = (start + end) / 2;
-
-//         for(int i = 0; i + start < mid && i + mid < end; i++) {
-//             if (up && a[i+start] > a[i+mid]) {
-//                 a[i+start] ^= a[i+mid] ^= a[i+start] ^= a[i+mid];
-//             }
-//             if (!up && a[i+start] < a[i+mid]) {
-//                 a[i+start] ^= a[i+mid] ^= a[i+start] ^= a[i+mid];
-//             }
-//         }
-
-//         cudaDeviceSynchronize();
-
-//         merge<<<BLOCKS, THREADS>>>(a, start, mid, up);
-//         merge<<<BLOCKS, THREADS>>>(a, mid, end, !up);
-//     }
-// }
 
 // #include "spfac_vars.h"
 
