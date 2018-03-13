@@ -115,10 +115,10 @@ __host__  PFAC_status_t  PFAC_kernel_timeDriven_wrapper(
     if ( texture_on ){
         
         // #### lock mutex, only one thread can bind texture
-        pfac_status = PFAC_tex_mutex_lock();
-        if ( PFAC_STATUS_SUCCESS != pfac_status ){ 
-            return pfac_status ;
-        } 
+//        pfac_status = PFAC_tex_mutex_lock();
+//        if ( PFAC_STATUS_SUCCESS != pfac_status ){ 
+//            return pfac_status ;
+//        } 
 
         textureReference *texRefTable ;
         cudaGetTextureReference( (const struct textureReference**)&texRefTable, "tex_PFAC_table" );
@@ -135,10 +135,10 @@ __host__  PFAC_status_t  PFAC_kernel_timeDriven_wrapper(
             handle->sizeOfTableInBytes ) ;
 
         // #### unlock mutex
-        pfac_status = PFAC_tex_mutex_unlock();
-        if ( PFAC_STATUS_SUCCESS != pfac_status ){ 
-            return pfac_status ;
-        }
+//        pfac_status = PFAC_tex_mutex_unlock();
+//        if ( PFAC_STATUS_SUCCESS != pfac_status ){ 
+//            return pfac_status ;
+//        }
 
         if ( cudaSuccess != cuda_status ){
             PFAC_PRINTF("Error: cannot bind texture, %d bytes %s\n", handle->sizeOfTableInBytes, cudaGetErrorString(cuda_status) );
@@ -224,17 +224,17 @@ __host__  PFAC_status_t  PFAC_kernel_timeDriven_wrapper(
 
     if ( texture_on ){
         // #### lock mutex, only one thread can unbind texture
-        pfac_status = PFAC_tex_mutex_lock();
-        if ( PFAC_STATUS_SUCCESS != pfac_status ){ 
-            return pfac_status ;
-        }
+//        pfac_status = PFAC_tex_mutex_lock();
+//        if ( PFAC_STATUS_SUCCESS != pfac_status ){ 
+//            return pfac_status ;
+//        }
         cudaUnbindTexture(tex_PFAC_table);
         
         // #### unlock mutex
-        pfac_status = PFAC_tex_mutex_unlock();
-        if ( PFAC_STATUS_SUCCESS != pfac_status ){ 
-            return pfac_status ;
-        }
+//        pfac_status = PFAC_tex_mutex_unlock();
+//        if ( PFAC_STATUS_SUCCESS != pfac_status ){ 
+//            return pfac_status ;
+//        }
     } 
 
     if ( cudaSuccess != cuda_status ){

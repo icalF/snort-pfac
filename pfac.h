@@ -206,6 +206,49 @@ struct PFAC_context {
     char patternFile[FILENAME_LEN] ;
 }  ;
 
+struct patternEle{
+    char *patternString;
+    int patternID;
+};
+
+
+struct pattern_cmp_functor{
+
+    // pattern *s and *t are terminated by character '\n'
+    // strict weak ordering
+    // return true if the first argument goes before the second argument
+    bool operator()( patternEle pattern_s, patternEle pattern_t ){
+        char s_char, t_char ;
+        bool s_end, t_end ;
+        char *s_sweep = pattern_s.patternString;
+        char *t_sweep = pattern_t.patternString;
+
+        while(1){
+            s_char = *s_sweep++ ;
+            t_char = *t_sweep++ ;
+            s_end = ('\n' == s_char) ;
+            t_end = ('\n' == t_char) ;
+
+            if ( s_end || t_end ){ break ; }
+
+            if (s_char < t_char){
+                return true ;
+            }else if ( s_char > t_char ){
+                return false ;
+            }
+        }
+
+        if ( s_end == t_end ){ // pattern s is the same as pattern t, the order is don't care
+            return true ;
+        }else if ( s_end ){ // pattern s is prefix of pattern t
+            return true ;
+        }else{
+            return false ; // pattern t is prefix of pattern s
+        }
+    }
+
+} ; 
+
 /*
  *  return
  *  ------
@@ -213,6 +256,14 @@ struct PFAC_context {
  *
  */
 const char* PFAC_getErrorString( PFAC_status_t status ) ;
+
+void initiate( char ***rowPtr, 
+    char **valPtr, int **patternID_table_ptr, int **patternLen_table_ptr,
+    int *max_state_num_ptr, int *pattern_num_ptr, int *state_num_ptr );
+
+void destroy( char ***rowPtr, 
+    char **valPtr, int **patternID_table_ptr, int **patternLen_table_ptr,
+    int *max_state_num_ptr, int *pattern_num_ptr, int *state_num_ptr );
 
 /*
  *  return
@@ -230,7 +281,23 @@ const char* PFAC_getErrorString( PFAC_status_t status ) ;
  *  PFAC_STATUS_INTERNAL_ERROR      please report bugs
  *  
  */
-PFAC_status_t  PFAC_readPatternFromFile( PFAC_handle_t handle, char *filename ) ;
+PFAC_status_t  PFAC_readPatternFromFile( PFAC_handle_t handle, char *filename );
+
+/*
+ *  Given k = pattern_number patterns in rowPtr[0:k-1] with lexicographic order and
+ *  patternLen_table[1:k], patternID_table[0:k-1]
+ *
+ *  user specified a initial state "initial_state",
+ *  construct
+ *  (1) PFAC_table: DFA of PFAC with k final states labeled from 1:k
+ *
+ *  WARNING: initial_state = k+1
+ */
+PFAC_status_t create_PFACTable_spaceDriven(const char** rowPtr, const int *patternLen_table, const int *patternID_table,
+    const int max_state_num,
+    const int pattern_num, const int initial_state, const int baseOfUsableStateID, 
+    int *state_num_ptr,
+    vector< vector<TableEle> > &PFAC_table );
 
 /*
  *  parse pattern file "patternFileName",
@@ -259,7 +326,9 @@ PFAC_status_t PFAC_tex_mutex_unlock( void );
  *  PFAC_STATUS_INTERNAL_ERROR     please report bugs
  *
  */
-PFAC_status_t  PFAC_dumpTransitionTable( PFAC_handle_t handle, FILE *fp ) ;
+PFAC_status_t  PFAC_dumpTransitionTable( int initial_state, int numOfStates, 
+	int numOfFinalState, int* patternID_table, int* patternLen_table,
+	vector< vector<TableEle> > *table_compact, char** rowPtr,  FILE *fp ) ;
 
 /* KERNEL */
 

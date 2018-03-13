@@ -1,0 +1,21 @@
+# Transition table: number of states = 15, initial state = 5
+# (current state, input character) -> next state 
+(   5,   A) -> 6 
+(   5,   B) -> 9 
+(   5,   E) -> 13 
+(   6,   B) -> 7 
+(   7,  0d) -> 1 
+(   7,   G) -> 8 
+(   8,  0d) -> 2 
+(   9,   E) -> 10 
+(  10,   D) -> 11 
+(  11,   E) -> 12 
+(  12,  0d) -> 3 
+(  13,   D) -> 14 
+(  14,  0d) -> 4 
+# Output table: number of final states = 4
+# [final state] [matched pattern ID] [pattern length] [pattern(string literal)] 
+    1     1     3    "AB0d"
+    2     2     4    "ABG0d"
+    3     3     5    "BEDE0d"
+    4     4     3    "ED0d"
