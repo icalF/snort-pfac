@@ -1,3 +1,4 @@
+
 cmake_minimum_required (VERSION 3.9)
 project ("PFAC-CUDA" LANGUAGES CXX CUDA)
 
@@ -5,7 +6,12 @@ project ("PFAC-CUDA" LANGUAGES CXX CUDA)
 
 #add_executable(playground icalcu.cu kernel.cu)
 
-add_executable(pfac pfac.cpp pfac_kernel.cu)
+add_executable(pfac pfac_main.cu
+					pfac.cu
+					pfac_match.cu
+					pfac_table.cu
+					pfac_file.cu
+					pfac_kernel.cu)
 
 #target_compile_features(ac PUBLIC cxx_std_11)
 

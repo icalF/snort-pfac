@@ -1,5 +1,4 @@
-#include <stdio.h>
-
+#include <cstdio>
 #include <vector>
 
 #ifndef PFAC_H_
@@ -79,13 +78,40 @@ struct PFAC_context ;
 
 typedef struct PFAC_context* PFAC_handle_t ;
 
-PFAC_status_t  PFAC_CPU_OMP(PFAC_handle_t handle, char *input_string, const int input_size, int *h_matched_result );
-PFAC_status_t  PFAC_CPU( PFAC_handle_t handle, char *h_input_string, const int input_size, int *h_matched_result ) ;
-
+/*
+ *  CUDA 4.0 can supports one host thread to multiple GPU contexts.
+ *  PFAC library still binds one PFAC handle to one GPU context.
+ *
+ *  consider followin example
+ *  ----------------------------------------------------------------------
+ *  cudaSetDevice(0);
+ *  PFAC_create( PFAC_handle0 );
+ *  PFAC_readPatternFromFile( PFAC_handle0, pattern_file )
+ *  cudaSetDevice(1);
+ *  PFAC_matchFromHost( PFAC_handle0, h_input_string, input_size, h_matched_result )
+ *  ----------------------------------------------------------------------
+ *
+ *  Then PFAC library does not work because transition table of DFA is in GPU0
+ *  but d_input_string and d_matched_result are in GPU1.
+ *  You can create two PFAC handles corresponding to different GPUs.
+ *  ----------------------------------------------------------------------
+ *  cudaSetDevice(0);
+ *  PFAC_create( PFAC_handle0 );
+ *  PFAC_readPatternFromFile( PFAC_handle0, pattern_file )
+ *  cudaSetDevice(1);
+ *  PFAC_create( PFAC_handle1 );
+ *  PFAC_readPatternFromFile( PFAC_handle1, pattern_file )
+ *  cudaSetDevice(0);
+ *  PFAC_matchFromHost( PFAC_handle0, h_input_string, input_size, h_matched_result )
+ *  cudaSetDevice(1);
+ *  PFAC_matchFromHost( PFAC_handle1, h_input_string, input_size, h_matched_result )
+ *  ----------------------------------------------------------------------
+ *
+ */
+PFAC_status_t  PFAC_create( PFAC_handle_t *handle );
 void  PFAC_freeTable( PFAC_handle_t handle );
 void  PFAC_freeResource( PFAC_handle_t handle );
-PFAC_status_t  PFAC_bindTable( PFAC_handle_t handle );
-PFAC_status_t  PFAC_create2DTable( PFAC_handle_t handle );
+PFAC_status_t  PFAC_destroy( PFAC_handle_t handle );
 
 /*
  *  suppose transistion table has S states, labelled as s0, s1, ... s{S-1}
@@ -265,88 +291,6 @@ struct pattern_cmp_functor{
  *
  */
 const char* PFAC_getErrorString( PFAC_status_t status ) ;
-
-void initiate( char ***rowPtr, 
-    char **valPtr, int **patternID_table_ptr, int **patternLen_table_ptr,
-    int *max_state_num_ptr, int *pattern_num_ptr, int *state_num_ptr );
-
-void destroy( char ***rowPtr, 
-    char **valPtr, int **patternID_table_ptr, int **patternLen_table_ptr,
-    int *max_state_num_ptr, int *pattern_num_ptr, int *state_num_ptr );
-
-/*
- *  return
- *  ------
- *  PFAC_STATUS_SUCCESS             if operation is successful
- *  PFAC_STATUS_INVALID_HANDLE      if "handle" is a NULL pointer,
- *                                  please call PFAC_create() to create a legal handle
- *  PFAC_STATUS_INVALID_PARAMETER   if "filename" is a NULL pointer. 
- *                                  The library does not support patterns from standard input
- *  PFAC_STATUS_FILE_OPEN_ERROR     if file "filename" does not exist
- *  PFAC_STATUS_ALLOC_FAILED         
- *  PFAC_STATUS_CUDA_ALLOC_FAILED   if host (device) memory is not enough to parse pattern file.
- *                                  The pattern file is too large to allocate host(device) memory.
- *                                  Please split the pattern file into smaller and try again
- *  PFAC_STATUS_INTERNAL_ERROR      please report bugs
- *  
- */
-PFAC_status_t  PFAC_readPatternFromFile( PFAC_handle_t handle, char *filename );
-
-/*
- *  Given k = pattern_number patterns in rowPtr[0:k-1] with lexicographic order and
- *  patternLen_table[1:k], patternID_table[0:k-1]
- *
- *  user specified a initial state "initial_state",
- *  construct
- *  (1) PFAC_table: DFA of PFAC with k final states labeled from 1:k
- *
- *  WARNING: initial_state = k+1
- */
-PFAC_status_t create_PFACTable_spaceDriven(const char** rowPtr, const int *patternLen_table, const int *patternID_table,
-    const int max_state_num,
-    const int pattern_num, const int initial_state, const int baseOfUsableStateID, 
-    int *state_num_ptr,
-    vector< vector<TableEle> > &PFAC_table );
-
-/*
- *  parse pattern file "patternFileName",
- *  (1) store all patterns in "patternPool" and
- *  (2) reorder the patterns according to lexicographic order and store
- *      reordered pointer in "rowPtr"
- *  (3) record original pattern ID in "patternID_table = *patternID_table_ptr"
- *  (4) record pattern length in "patternLen_table = *patternLen_table_ptr"
- *
- *  (5) *pattern_num_ptr = number of patterns
- *  (6) *max_state_num_ptr = estimation (upper bound) of total states in PFAC DFA
- *
- */
-PFAC_status_t parsePatternFile( char *patternFileName, char ***rowPtr, char **patternPool,
-    int **patternID_table_ptr, int **patternLen_table_ptr, int *max_state_num_ptr, int *pattern_num_ptr ) ;
-
-
-PFAC_status_t PFAC_tex_mutex_lock( void );
-
-PFAC_status_t PFAC_tex_mutex_unlock( void );
-
-/*
- *  return
- *  ------
- *  PFAC_STATUS_SUCCESS            if operation is successful
- *  PFAC_STATUS_INTERNAL_ERROR     please report bugs
- *
- */
-PFAC_status_t  PFAC_dumpTransitionTable( int initial_state, int numOfStates, 
-	int numOfFinalState, int* patternID_table, int* patternLen_table,
-	vector< vector<TableEle> > *table_compact, char** rowPtr,  FILE *fp ) ;
-
-/* KERNEL */
-
-extern PFAC_status_t  PFAC_kernel_timeDriven_wrapper( PFAC_handle_t handle, char *d_input_string, size_t input_size,
-    int *d_matched_result) ;
-
-
-
-
 
 #ifdef __cplusplus
 }
