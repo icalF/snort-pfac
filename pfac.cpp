@@ -236,12 +236,12 @@ PFAC_status_t  PFAC_create( PFAC_handle_t *handle )
 //    }
 
     // Find entry point of PFAC_kernel
-//    (*handle)->kernel_time_driven_ptr = (PFAC_kernel_protoType) dlsym (module, "PFAC_kernel_timeDriven_warpper");
-//    if ( NULL == (*handle)->kernel_time_driven_ptr ){
-//        PFAC_PRINTF("Error: cannot load PFAC_kernel_timeDriven_warpper, error = %s\n", dlerror() );
-//        return PFAC_STATUS_INTERNAL_ERROR ;
-//    }
-//    
+    (*handle)->kernel_ptr = (PFAC_kernel_protoType) PFAC_kernel_timeDriven_wrapper;
+    if ( NULL == (*handle)->kernel_ptr ){
+        PFAC_PRINTF("Error: cannot load PFAC_kernel_timeDriven_wrapper, error = %s\n", "" );
+        return PFAC_STATUS_INTERNAL_ERROR ;
+    }
+
 //    (*handle)->kernel_space_driven_ptr = (PFAC_kernel_protoType) dlsym (module, "PFAC_kernel_spaceDriven_warpper");
 //    if ( NULL == (*handle)->kernel_space_driven_ptr ){
 //        PFAC_PRINTF("Error: cannot load PFAC_kernel_spaceDriven_warpper, error = %s\n", dlerror() );
@@ -368,16 +368,15 @@ PFAC_status_t  PFAC_readPatternFromFile( PFAC_handle_t handle, char *filename )
     // step 3: copy data to device memory
     handle->isPatternsReady = true ;
 
-//    PFAC_status = PFAC_bindTable( handle ) ;
-//    if ( PFAC_STATUS_SUCCESS != PFAC_status){
-//         PFAC_freeResource( handle );
-//         handle->isPatternsReady = false ;
-//         return PFAC_status ;
-//    }
+    PFAC_status = PFAC_bindTable( handle ) ;
+    if ( PFAC_STATUS_SUCCESS != PFAC_status){
+        PFAC_freeResource( handle );
+        handle->isPatternsReady = false ;
+        return PFAC_status ;
+    }
         
-    return PFAC_STATUS_SUCCESS ;
+    return PFAC_status ;
 }
-
 
 /*
  *  parse pattern file "patternFileName",
@@ -651,6 +650,223 @@ PFAC_status_t  PFAC_dumpTransitionTable( PFAC_handle_t handle, FILE *fp )
     return PFAC_STATUS_SUCCESS ;
 }
 
+/*
+ *  suppose N = number of states
+ *          C = number of character set = 256
+ *
+ *  TIME-DRIVEN:
+ *     allocate a explicit 2-D table with N*C integers.
+ *     host: 
+ *          h_PFAC_table
+ *     device: 
+ *          d_PFAC_table
+ *
+ *  SPACE-DRIVEN:
+ *     allocate a hash table (hashRowPtr, hashValPtr)
+ *     host:
+ *          h_hashRowPtr
+ *          h_hashValPtr
+ *          h_tableOfInitialState
+ *     device:
+ *          d_hashRowPtr
+ *          d_hashValPtr
+ *          d_tableOfInitialState         
+ */
+PFAC_status_t  PFAC_bindTable( PFAC_handle_t handle )
+{
+    if ( NULL == handle ){
+        return PFAC_STATUS_INVALID_HANDLE ;
+    }
+    
+    PFAC_status_t PFAC_status ;
+    PFAC_status = PFAC_create2DTable(handle);
+    if ( PFAC_STATUS_SUCCESS != PFAC_status ){  	
+        PFAC_PRINTF("Error: cannot create transistion table \n");	
+        return PFAC_status ;
+    }
+
+    return PFAC_STATUS_SUCCESS ;
+}
+
+ 
+PFAC_status_t  PFAC_create2DTable( PFAC_handle_t handle )
+{
+    if ( !(handle->isPatternsReady) ){
+        return PFAC_STATUS_PATTERNS_NOT_READY ;
+    }	
+    
+    /* perfMode is PFAC_TIME_DRIVEN, we don't need to allocate 2-D table again */
+    if ( NULL != handle->d_PFAC_table ){
+        return PFAC_STATUS_SUCCESS ;
+    }	
+    
+    const int numOfStates = handle->numOfStates ;
+
+    handle->numOfTableEntry = CHAR_SET*numOfStates ; 
+    handle->sizeOfTableEntry = sizeof(int) ; 
+    handle->sizeOfTableInBytes = (handle->numOfTableEntry) * (handle->sizeOfTableEntry) ; 
+
+#define  PFAC_TABLE_MAP( i , j )   (i)*CHAR_SET + (j)    
+
+    if ( NULL == handle->h_PFAC_table){    
+        handle->h_PFAC_table = (int*) malloc( handle->sizeOfTableInBytes ) ;
+        if ( NULL == handle->h_PFAC_table ){
+            return PFAC_STATUS_ALLOC_FAILED ;
+        }
+    
+        // initialize PFAC table to TRAP_STATE
+        for (int i = 0; i < numOfStates ; i++) {
+            for (int j = 0; j < CHAR_SET; j++) {
+                (handle->h_PFAC_table)[ PFAC_TABLE_MAP( i , j ) ] = TRAP_STATE ;
+            }
+        }
+        for(int i = 0 ; i < numOfStates ; i++ ){
+            for(int j = 0 ; j < (int)(*(handle->table_compact))[i].size(); j++){
+                TableEle ele = (*(handle->table_compact))[i][j];
+                (handle->h_PFAC_table)[ PFAC_TABLE_MAP( i , ele.ch ) ] = ele.nextState;  	
+            }
+        }
+    }
+
+    cudaError_t cuda_status = cudaMalloc((void **) &handle->d_PFAC_table, handle->sizeOfTableInBytes );
+    if ( cudaSuccess != cuda_status ){
+        free(handle->h_PFAC_table);
+        handle->h_PFAC_table = NULL ;
+        return PFAC_STATUS_CUDA_ALLOC_FAILED ;
+    }
+
+    cuda_status = cudaMemcpy(handle->d_PFAC_table, handle->h_PFAC_table,
+        handle->sizeOfTableInBytes, cudaMemcpyHostToDevice);
+    if ( cudaSuccess != cuda_status ){
+        free(handle->h_PFAC_table);
+        handle->h_PFAC_table = NULL ;
+        cudaFree(handle->d_PFAC_table);
+        handle->d_PFAC_table = NULL;    	
+        return PFAC_STATUS_INTERNAL_ERROR ;
+    }
+    
+    return PFAC_STATUS_SUCCESS ;
+}
+
+
+inline void correctTextureMode(PFAC_handle_t handle)
+{		
+    PFAC_PRINTF("handle->textureMode = %d\n",handle->textureMode );	
+    /* maximum width for a 1D texture reference is independent of type */
+    if ( PFAC_AUTOMATIC == handle->textureMode ){
+        if ( handle->numOfTableEntry < MAXIMUM_WIDTH_1DTEX ){ 
+            PFAC_PRINTF("reset to tex on, handle->numOfTableEntry =%d < %d\n",handle->numOfTableEntry, MAXIMUM_WIDTH_1DTEX);         	
+            handle->textureMode = PFAC_TEXTURE_ON ;
+        }else{
+            PFAC_PRINTF("reset to tex off, handle->numOfTableEntry =%d > %d\n",handle->numOfTableEntry, MAXIMUM_WIDTH_1DTEX); 
+            handle->textureMode = PFAC_TEXTURE_OFF ;
+        }
+    }
+}
+
+/*
+ *  platform is immaterial, do matching on GPU
+ *
+ *  WARNING: d_input_string is allocated by caller, the size may not be multiple of 4.
+ *  if shared mmeory version is chosen (for example, maximum pattern length is less than 512), then
+ *  it is out-of-array bound logically, but it may not happen physically because basic unit of cudaMalloc() 
+ *  is 256 bytes.  
+ */
+PFAC_status_t  PFAC_matchFromDevice( PFAC_handle_t handle, char *d_input_string, size_t input_size,
+    int *d_matched_result )
+{
+    if ( NULL == handle ){
+        return PFAC_STATUS_INVALID_HANDLE ;
+    }
+    if ( !(handle->isPatternsReady) ){
+        return PFAC_STATUS_PATTERNS_NOT_READY ;
+    }
+    if ( NULL == d_input_string ){
+        return PFAC_STATUS_INVALID_PARAMETER ;
+    }
+    if ( NULL == d_matched_result ){
+        return PFAC_STATUS_INVALID_PARAMETER ;
+    }
+
+    if ( 0 == input_size ){ 
+        return PFAC_STATUS_SUCCESS ;	
+    }
+
+    correctTextureMode(handle);
+	
+	PFAC_status_t PFAC_status ;
+	PFAC_status = (*(handle->kernel_ptr))( handle, d_input_string, input_size, d_matched_result );
+    return PFAC_status;
+}
+
+
+PFAC_status_t  PFAC_matchFromHost( PFAC_handle_t handle, char *h_input_string, size_t input_size,
+    int *h_matched_result )
+{
+    if ( NULL == handle ){
+        return PFAC_STATUS_INVALID_HANDLE ;
+    }
+    if ( !(handle->isPatternsReady) ){
+        return PFAC_STATUS_PATTERNS_NOT_READY ;
+    }
+    if ( NULL == h_input_string ){
+        return PFAC_STATUS_INVALID_PARAMETER ;
+    }
+    if ( NULL == h_matched_result ){
+        return PFAC_STATUS_INVALID_PARAMETER ;
+    }
+
+    if ( 0 == input_size ){ 
+        return PFAC_STATUS_SUCCESS ;	
+    }
+	
+    char *d_input_string  = NULL;
+    int *d_matched_result = NULL;
+
+    // n_hat = number of integers of input string
+    int n_hat = (input_size + sizeof(int)-1)/sizeof(int) ;
+
+    // allocate memory for input string and result
+    // basic unit of d_input_string is integer
+	PFAC_PRINTF("Meong");
+    cudaError_t cuda_status1 = cudaMalloc((void **) &d_input_string,        n_hat*sizeof(int) );
+    cudaError_t cuda_status2 = cudaMalloc((void **) &d_matched_result, input_size*sizeof(int) );
+    if ( (cudaSuccess != cuda_status1) || (cudaSuccess != cuda_status2) ){
+    	  if ( NULL != d_input_string   ) { cudaFree(d_input_string); }
+    	  if ( NULL != d_matched_result ) { cudaFree(d_matched_result); }
+        return PFAC_STATUS_CUDA_ALLOC_FAILED;
+    }
+
+    // copy input string from host to device
+    cuda_status1 = cudaMemcpy(d_input_string, h_input_string, input_size, cudaMemcpyHostToDevice);
+    if ( cudaSuccess != cuda_status1 ){
+        cudaFree(d_input_string); 
+        cudaFree(d_matched_result);
+        return PFAC_STATUS_INTERNAL_ERROR ;
+    }
+
+    PFAC_status_t PFAC_status = PFAC_matchFromDevice( handle, d_input_string, input_size,
+        d_matched_result ) ;
+
+    if ( PFAC_STATUS_SUCCESS != PFAC_status ){
+        cudaFree(d_input_string);
+        cudaFree(d_matched_result);
+        return PFAC_status ;
+    }
+
+    // copy the result data from device to host
+    cuda_status1 = cudaMemcpy(h_matched_result, d_matched_result, input_size*sizeof(int), cudaMemcpyDeviceToHost);
+    if ( cudaSuccess != cuda_status1 ){
+        cudaFree(d_input_string);
+        cudaFree(d_matched_result);
+        return PFAC_STATUS_INTERNAL_ERROR;
+    }
+
+    cudaFree(d_input_string);
+    cudaFree(d_matched_result);
+
+    return PFAC_STATUS_SUCCESS ;
+}
 
 void initiate( char ***rowPtr, 
     char **valPtr, int **patternID_table_ptr, int **patternLen_table_ptr,
@@ -697,14 +913,14 @@ int main(int argc, char **argv)
     }
 
 	// dump transition table 
-	FILE *table_fp = fopen(dumpTableFile, "w");
-	assert(NULL != table_fp);
-	PFAC_status = PFAC_dumpTransitionTable( handle, table_fp );
-	fclose(table_fp);
-	if (PFAC_STATUS_SUCCESS != PFAC_status) {
-		printf("Error: fails to dump transition table, %s\n", PFAC_getErrorString(PFAC_status));
-		exit(1);
-	}
+//	FILE *table_fp = fopen(dumpTableFile, "w");
+//	assert(NULL != table_fp);
+//	PFAC_status = PFAC_dumpTransitionTable( handle, table_fp );
+//	fclose(table_fp);
+//	if (PFAC_STATUS_SUCCESS != PFAC_status) {
+//		printf("Error: fails to dump transition table, %s\n", PFAC_getErrorString(PFAC_status));
+//		exit(1);
+//	}
 
 	//step 3: prepare input stream
 	FILE* fpin = fopen(inputFile, "rb");
@@ -728,21 +944,21 @@ int main(int argc, char **argv)
 	fclose(fpin);
 
 	// step 4: run PFAC on GPU           
-//    PFAC_status = PFAC_matchFromHost( handle, h_inputString, input_size, h_matched_result ) ;
-//    if ( PFAC_STATUS_SUCCESS != PFAC_status ){
-//        printf("Error: fails to PFAC_matchFromHost, %s\n", PFAC_getErrorString(PFAC_status) );
-//        exit(1) ;	
-//    }     
+    PFAC_status = PFAC_matchFromHost( handle, h_inputString, input_size, h_matched_result ) ;
+    if ( PFAC_STATUS_SUCCESS != PFAC_status ){
+        printf("Error: fails to PFAC_matchFromHost, %s\n", PFAC_getErrorString(PFAC_status) );
+        exit(1) ;	
+    }     
 
 	// step 5: output matched result
-//    for (int i = 0; i < input_size; i++) {
-//        if (h_matched_result[i] != 0) {
-//            printf("At position %4d, match pattern %d\n", i, h_matched_result[i]);
-//        }
-//    }
+    for (int i = 0; i < input_size; i++) {
+        if (h_matched_result[i] != 0) {
+            printf("At position %4d, match pattern %d\n", i, h_matched_result[i]);
+        }
+    }
 
-//    PFAC_status = PFAC_destroy( handle ) ;
-//    assert( PFAC_STATUS_SUCCESS == PFAC_status );
+    PFAC_status = PFAC_destroy( handle ) ;
+    assert( PFAC_STATUS_SUCCESS == PFAC_status );
 
 	free(h_inputString);
 	free(h_matched_result);

@@ -111,7 +111,8 @@ __host__  PFAC_status_t  PFAC_kernel_timeDriven_wrapper(
     bool texture_on = (PFAC_TEXTURE_ON == handle->textureMode );
 
     PFAC_PRINTF("texture on = %d\n", texture_on);
-
+	
+    textureReference *texRefTable ;
     if ( texture_on ){
         
         // #### lock mutex, only one thread can bind texture
@@ -120,8 +121,12 @@ __host__  PFAC_status_t  PFAC_kernel_timeDriven_wrapper(
 //            return pfac_status ;
 //        } 
 
-        textureReference *texRefTable ;
-        cudaGetTextureReference( (const struct textureReference**)&texRefTable, "tex_PFAC_table" );
+        cuda_status = cudaGetTextureReference( (const struct textureReference**)&texRefTable, &tex_PFAC_table );
+		if ( cudaSuccess != cuda_status ){
+            PFAC_PRINTF("Error: cannot get texture reference, %s\n", cudaGetErrorString(cuda_status) );
+            return PFAC_STATUS_CUDA_ALLOC_FAILED ;
+        }
+
         cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc<int>();
         // set texture parameters
         tex_PFAC_table.addressMode[0] = cudaAddressModeClamp;
@@ -228,7 +233,7 @@ __host__  PFAC_status_t  PFAC_kernel_timeDriven_wrapper(
 //        if ( PFAC_STATUS_SUCCESS != pfac_status ){ 
 //            return pfac_status ;
 //        }
-        cudaUnbindTexture(tex_PFAC_table);
+        cudaUnbindTexture(texRefTable);
         
         // #### unlock mutex
 //        pfac_status = PFAC_tex_mutex_unlock();
@@ -448,12 +453,14 @@ __global__ void PFAC_kernel_timeDriven(int *d_PFAC_table, int *d_input_string, i
     if ( gbid < num_blocks_minus1 ){
         #pragma unroll
         for (int j = 0 ; j < 4 ; j++ ){
+            PFAC_PRINTF("Match at %d: %d\n", start, match[j]);
             d_match_result[start] = match[j];
             start += BLOCKSIZE ;
         }
     }else{
         int j = 0 ;
         MANUAL_EXPAND_4( if (start>=input_size) return ; d_match_result[start] = match[j]; \
+            PFAC_PRINTF("Match at %d: %d\n", start, match[j]); \
             j++ ; start += BLOCKSIZE ; )
     }
 }

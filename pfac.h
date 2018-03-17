@@ -25,6 +25,7 @@ using namespace std;
  * debug mode:  PFAC_PRINTF( ... ) printf( __VA_ARGS__ )
  * release mode:  PFAC_PRINTF( ... ) 
  */
+#define DEBUG
 #ifndef DEBUG 
     #define PFAC_PRINTF(...)
 #else
@@ -62,6 +63,18 @@ typedef enum {
     PFAC_STATUS_INTERNAL_ERROR 
 } PFAC_status_t ;
 
+typedef enum {
+    PFAC_PLATFORM_GPU = 0,  // default
+    PFAC_PLATFORM_CPU = 1,
+    PFAC_PLATFORM_CPU_OMP = 2
+} PFAC_platform_t ;
+
+typedef enum {
+    PFAC_AUTOMATIC   = 0,  // default
+    PFAC_TEXTURE_ON  = 1,
+    PFAC_TEXTURE_OFF = 2
+} PFAC_textureMode_t ;
+
 struct PFAC_context ;
 
 typedef struct PFAC_context* PFAC_handle_t ;
@@ -73,7 +86,6 @@ void  PFAC_freeTable( PFAC_handle_t handle );
 void  PFAC_freeResource( PFAC_handle_t handle );
 PFAC_status_t  PFAC_bindTable( PFAC_handle_t handle );
 PFAC_status_t  PFAC_create2DTable( PFAC_handle_t handle );
-PFAC_status_t  PFAC_createHashTable( PFAC_handle_t handle );
 
 /*
  *  suppose transistion table has S states, labelled as s0, s1, ... s{S-1}
@@ -166,12 +178,9 @@ struct PFAC_context {
     size_t  sizeOfTableEntry ; 
     size_t  sizeOfTableInBytes ; // numOfTableEntry * sizeOfTableEntry
        
-    // function pointer of non-reduce kernel under PFAC_TIME_DRIVEN
-    PFAC_kernel_protoType  kernel_time_driven_ptr ;
-    
-    // function pointer of non-reduce kernel under PFAC_SPACE_DRIVEN
-    // PFAC_kernel_protoType  kernel_space_driven_ptr ;
-    
+    // function pointer of non-reduce kernel
+    PFAC_kernel_protoType  kernel_ptr;
+
     // function pointer of reduce kernel under PFAC_TIME_DRIVEN
     // PFAC_reduce_kernel_protoType  reduce_kernel_ptr ;
     
