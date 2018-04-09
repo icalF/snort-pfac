@@ -84,9 +84,7 @@ PFAC_status_t  PFAC_bindTable( PFAC_handle_t handle );
  *  PFAC_STATUS_INTERNAL_ERROR     please report bugs
  *
  */
-PFAC_status_t  PFAC_dumpTransitionTable( int initial_state, int numOfStates, 
-    int numOfFinalState, int* patternID_table, int* patternLen_table,
-    vector< vector<TableEle> > *table_compact, char** rowPtr,  FILE *fp ) ;
+PFAC_status_t  PFAC_dumpTransitionTable( PFAC_handle_t handle, FILE *fp ) ;
 
 inline void correctTextureMode(PFAC_handle_t handle)
 {       

@@ -105,6 +105,37 @@ void  PFAC_freeTable( PFAC_handle_t handle )
     }   
 }
 
+/* warpper for pthread_mutex_lock and pthread_mutex_unlock */
+mutex  __pfac_tex_mutex;    
+
+PFAC_status_t PFAC_tex_mutex_lock(void)
+{
+    try
+    {
+        __pfac_tex_mutex.lock();
+    }
+    catch (const system_error &e)
+    {
+        return PFAC_STATUS_MUTEX_ERROR;
+    }
+
+    return PFAC_STATUS_SUCCESS;
+}
+
+PFAC_status_t PFAC_tex_mutex_unlock(void)
+{
+    try
+    {
+        __pfac_tex_mutex.unlock();
+    }
+    catch (const system_error &e)
+    {
+        return PFAC_STATUS_MUTEX_ERROR;
+    }
+
+    return PFAC_STATUS_SUCCESS;
+}
+
 PFAC_status_t  PFAC_create( PFAC_handle_t handle )
 {
     handle = (PFAC_handle_t) malloc( sizeof(PFAC_STRUCT) ) ;

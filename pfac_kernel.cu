@@ -39,13 +39,14 @@
  *
  */
  
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <cassert>
+#include <cctype>
+#include <cstdarg>
+
 #include <cuda_runtime.h>
-#include <assert.h>
-#include <ctype.h>
-#include <stdarg.h>
 
 #include "pfac.h"
 
@@ -108,7 +109,7 @@ __host__  PFAC_status_t  PFAC_kernel_timeDriven_wrapper(
     bool smem_on = ((4*EXTRA_SIZE_PER_TB-1) >= handle->maxPatternLen) ;
     
 #define PFAC_TEXTURE_ON 1
-    bool texture_on = (PFAC_TEXTURE_ON == handle->textureMode );
+    bool texture_on = (PFAC_TEXTURE_ON != handle->textureMode );
 
     PFAC_PRINTF("texture on = %d\n", texture_on);
 	
@@ -116,10 +117,10 @@ __host__  PFAC_status_t  PFAC_kernel_timeDriven_wrapper(
     if ( texture_on ){
         
         // #### lock mutex, only one thread can bind texture
-//        pfac_status = PFAC_tex_mutex_lock();
-//        if ( PFAC_STATUS_SUCCESS != pfac_status ){ 
-//            return pfac_status ;
-//        } 
+        pfac_status = PFAC_tex_mutex_lock();
+        if ( PFAC_STATUS_SUCCESS != pfac_status ){ 
+            return pfac_status ;
+        } 
 
         cuda_status = cudaGetTextureReference( (const struct textureReference**)&texRefTable, &tex_PFAC_table );
 		if ( cudaSuccess != cuda_status ){
@@ -140,10 +141,10 @@ __host__  PFAC_status_t  PFAC_kernel_timeDriven_wrapper(
             handle->sizeOfTableInBytes ) ;
 
         // #### unlock mutex
-//        pfac_status = PFAC_tex_mutex_unlock();
-//        if ( PFAC_STATUS_SUCCESS != pfac_status ){ 
-//            return pfac_status ;
-//        }
+        pfac_status = PFAC_tex_mutex_unlock();
+        if ( PFAC_STATUS_SUCCESS != pfac_status ){ 
+            return pfac_status ;
+        }
 
         if ( cudaSuccess != cuda_status ){
             PFAC_PRINTF("Error: cannot bind texture, %d bytes %s\n", handle->sizeOfTableInBytes, cudaGetErrorString(cuda_status) );
@@ -229,17 +230,17 @@ __host__  PFAC_status_t  PFAC_kernel_timeDriven_wrapper(
 
     if ( texture_on ){
         // #### lock mutex, only one thread can unbind texture
-//        pfac_status = PFAC_tex_mutex_lock();
-//        if ( PFAC_STATUS_SUCCESS != pfac_status ){ 
-//            return pfac_status ;
-//        }
+        pfac_status = PFAC_tex_mutex_lock();
+        if ( PFAC_STATUS_SUCCESS != pfac_status ){ 
+            return pfac_status ;
+        }
         cudaUnbindTexture(texRefTable);
         
         // #### unlock mutex
-//        pfac_status = PFAC_tex_mutex_unlock();
-//        if ( PFAC_STATUS_SUCCESS != pfac_status ){ 
-//            return pfac_status ;
-//        }
+        pfac_status = PFAC_tex_mutex_unlock();
+        if ( PFAC_STATUS_SUCCESS != pfac_status ){ 
+            return pfac_status ;
+        }
     } 
 
     if ( cudaSuccess != cuda_status ){
