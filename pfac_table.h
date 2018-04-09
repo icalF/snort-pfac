@@ -1,11 +1,38 @@
 #ifndef PFAC_TABLE_H_
 #define PFAC_TABLE_H_
 
+#include <cctype>
+
 #include "pfac.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif   // __cplusplus
+
+
+/*
+ ** Case Translation Table
+ */
+static unsigned char xlatcase[256];
+
+/*
+ *
+ */
+static void init_xlatcase ()
+{
+    int i;
+    for (i = 0; i < 256; i++)
+    {
+        xlatcase[i] = (unsigned char)toupper (i);
+    }
+}
+
+
+PFAC_status_t PFAC_addPattern( PFAC_handle_t handle, const char *half );
+
+PFAC_status_t PFAC_sortPattern( PFAC_handle_t handle );
+
+PFAC_status_t PFAC_compilePattern( PFAC_handle_t handle );
 
 /*
  *  Given k = pattern_number patterns in rowPtr[0:k-1] with lexicographic order and

@@ -66,7 +66,6 @@ PFAC_status_t  PFAC_matchFromHost( PFAC_handle_t handle, char *h_input_string, s
 
     // allocate memory for input string and result
     // basic unit of d_input_string is integer
-    PFAC_PRINTF("Meong");
     cudaError_t cuda_status1 = cudaMalloc((void **) &d_input_string,        n_hat*sizeof(int) );
     cudaError_t cuda_status2 = cudaMalloc((void **) &d_matched_result, input_size*sizeof(int) );
     if ( (cudaSuccess != cuda_status1) || (cudaSuccess != cuda_status2) ){

@@ -74,9 +74,30 @@ typedef enum {
     PFAC_TEXTURE_OFF = 2
 } PFAC_textureMode_t ;
 
-struct PFAC_context ;
+typedef struct _spfac_userdata{
+    unsigned ref_count;
+    void *id;
 
-typedef struct PFAC_context* PFAC_handle_t ;
+} PFAC_USERDATA;
+
+typedef struct _pfac_pattern{
+    struct _pfac_pattern *next;
+    unsigned char *patrn;
+    unsigned char *casepatrn;
+    int n;
+    int nocase;
+    int offset;
+    int depth;
+    int negative;
+    PFAC_USERDATA *udata;
+    int iid;
+    void *rule_option_tree;
+    void *neg_list;
+} PFAC_PATTERN;
+
+struct PFAC_STRUCT;
+
+typedef struct PFAC_STRUCT* PFAC_handle_t;
 
 /*
  *  CUDA 4.0 can supports one host thread to multiple GPU contexts.
@@ -108,7 +129,7 @@ typedef struct PFAC_context* PFAC_handle_t ;
  *  ----------------------------------------------------------------------
  *
  */
-PFAC_status_t  PFAC_create( PFAC_handle_t *handle );
+PFAC_status_t  PFAC_create( PFAC_handle_t handle );
 void  PFAC_freeTable( PFAC_handle_t handle );
 void  PFAC_freeResource( PFAC_handle_t handle );
 PFAC_status_t  PFAC_destroy( PFAC_handle_t handle );
@@ -158,7 +179,7 @@ typedef struct {
 typedef PFAC_status_t (*PFAC_kernel_protoType)( PFAC_handle_t handle, char *d_input_string, size_t input_size,
     int *d_matched_result ) ;
 
-struct PFAC_context {
+struct PFAC_STRUCT {
     // host
     char **rowPtr ; /* rowPtr[0:k-1] contains k pointer pointing to k patterns which reside in "valPtr"
                      * the order of patterns is sorted by lexicographic, say
@@ -239,6 +260,12 @@ struct PFAC_context {
     int device_no ; // = 10*deviceProp.major + deviceProp.minor ;
     
     char patternFile[FILENAME_LEN] ;
+
+    PFAC_PATTERN *pfacPatterns;
+
+    void (*userfree)(void *p);
+    void (*optiontreefree)(void **p);
+    void (*neg_list_free)(void **p);
 }  ;
 
 struct patternEle{
@@ -282,7 +309,7 @@ struct pattern_cmp_functor{
         }
     }
 
-} ; 
+}; 
 
 /*
  *  return
@@ -290,7 +317,78 @@ struct pattern_cmp_functor{
  *  char * pointer to a NULL-terminated string. This is string literal, do not overwrite it.
  *
  */
-const char* PFAC_getErrorString( PFAC_status_t status ) ;
+static const char* PFAC_getErrorString( PFAC_status_t status )
+{
+    static char PFAC_success_str[] = "PFAC_STATUS_SUCCESS: operation is successful" ;
+    static char PFAC_alloc_failed_str[] = "PFAC_STATUS_ALLOC_FAILED: allocation fails on host memory" ;
+    static char PFAC_cuda_alloc_failed_str[] = "PFAC_STATUS_CUDA_ALLOC_FAILED: allocation fails on device memory" ;
+    static char PFAC_invalid_handle_str[] = "PFAC_STATUS_INVALID_HANDLE: handle is invalid (NULL)" ;
+    static char PFAC_invalid_parameter_str[] = "PFAC_STATUS_INVALID_PARAMETER: parameter is invalid" ;
+    static char PFAC_patterns_not_ready_str[] = "PFAC_STATUS_PATTERNS_NOT_READY: please call PFAC_readPatternFromFile() first" ;
+    static char PFAC_file_open_error_str[] = "PFAC_STATUS_FILE_OPEN_ERROR: pattern file does not exist" ;
+    static char PFAC_lib_not_exist_str[] = "PFAC_STATUS_LIB_NOT_EXIST: cannot find PFAC library, please check LD_LIBRARY_PATH" ;
+    static char PFAC_arch_mismatch_str[] = "PFAC_STATUS_ARCH_MISMATCH: sm1.0 is not supported" ;
+    static char PFAC_mutex_error[] = "PFAC_STATUS_MUTEX_ERROR: please report bugs. Workaround: choose non-texture mode.";
+    static char PFAC_internal_error_str[] = "PFAC_STATUS_INTERNAL_ERROR: please report bugs" ;
+
+    if ( PFAC_STATUS_SUCCESS == status ){
+        return PFAC_success_str ;
+    }
+    if ( PFAC_STATUS_BASE > status ){
+        return cudaGetErrorString( (cudaError_t) status ) ;
+    }
+
+    switch(status){
+    case PFAC_STATUS_ALLOC_FAILED:
+        return PFAC_alloc_failed_str ;
+    case PFAC_STATUS_CUDA_ALLOC_FAILED:
+        return PFAC_cuda_alloc_failed_str;
+    case PFAC_STATUS_INVALID_HANDLE:
+        return PFAC_invalid_handle_str ;
+    case PFAC_STATUS_INVALID_PARAMETER:
+        return PFAC_invalid_parameter_str ;
+    case PFAC_STATUS_PATTERNS_NOT_READY:
+        return PFAC_patterns_not_ready_str ;
+    case PFAC_STATUS_FILE_OPEN_ERROR:
+        return PFAC_file_open_error_str ;
+    case PFAC_STATUS_LIB_NOT_EXIST:
+        return PFAC_lib_not_exist_str ;
+    case PFAC_STATUS_ARCH_MISMATCH:
+        return PFAC_arch_mismatch_str ;
+    case PFAC_STATUS_MUTEX_ERROR:
+        return PFAC_mutex_error ;
+    default : // PFAC_STATUS_INTERNAL_ERROR:
+        return PFAC_internal_error_str ;
+    }
+}
+
+/**
+ * 
+ * SNORT PROTOTYPE
+ * 
+ */
+
+PFAC_STRUCT * pfacNew (void (*userfree)(void *p),
+        void (*optiontreefree)(void **p),
+        void (*neg_list_free)(void **p));
+
+int pfacAddPattern( PFAC_STRUCT * p, unsigned char * pat, int n,
+        int nocase, int offset, int depth, int negative, void * id, int iid );
+
+int pfacCompile ( PFAC_STRUCT * pfac,
+        int (*build_tree)(void * id, void **existing_tree),
+        int (*neg_list_func)(void *id, void **list));
+
+int pfacSearch ( PFAC_STRUCT * pfac,unsigned char * T, int n, 
+        int (*Match)(void * id, void *tree, int index, void *data, void *neg_list),
+        void * data, int* current_state );
+
+void pfacFree ( PFAC_STRUCT * pfac );
+int pfacPatternCount ( PFAC_STRUCT * pfac );
+
+int pfacPrintDetailInfo(PFAC_STRUCT *);
+
+int pfacPrintSummaryInfo(void);
 
 #ifdef __cplusplus
 }
