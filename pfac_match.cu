@@ -60,17 +60,20 @@ PFAC_status_t  PFAC_matchFromHost( PFAC_handle_t handle, char *h_input_string, s
     
     char *d_input_string  = NULL;
     int *d_matched_result = NULL;
+    int *d_num_matched    = NULL;
 
     // n_hat = number of integers of input string
     int n_hat = (input_size + sizeof(int)-1)/sizeof(int) ;
 
     // allocate memory for input string and result
     // basic unit of d_input_string is integer
-    cudaError_t cuda_status1 = cudaMalloc((void **) &d_input_string,        n_hat*sizeof(int) );
-    cudaError_t cuda_status2 = cudaMalloc((void **) &d_matched_result, input_size*sizeof(int) );
-    if ( (cudaSuccess != cuda_status1) || (cudaSuccess != cuda_status2) ){
+    cudaError_t cuda_status1 = cudaMalloc((void **) &d_input_string,            n_hat*sizeof(int) );
+    cudaError_t cuda_status2 = cudaMalloc((void **) &d_matched_result,     input_size*sizeof(int) );
+    cudaError_t cuda_status3 = cudaMalloc((void **) &d_num_matched, THREAD_BLOCK_SIZE*sizeof(int) );
+    if ( (cudaSuccess != cuda_status1) || (cudaSuccess != cuda_status2) || (cudaSuccess != cuda_status3) ){
           if ( NULL != d_input_string   ) { cudaFree(d_input_string); }
           if ( NULL != d_matched_result ) { cudaFree(d_matched_result); }
+          if ( NULL != d_num_matched    ) { cudaFree(d_num_matched); }
         return PFAC_STATUS_CUDA_ALLOC_FAILED;
     }
 

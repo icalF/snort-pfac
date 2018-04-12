@@ -50,22 +50,17 @@
 
 #include "pfac.h"
 
-#ifdef __cplusplus
-extern "C" {
+// #ifdef __cplusplus
+// extern "C" {
  
-PFAC_status_t  PFAC_kernel_timeDriven_wrapper( PFAC_handle_t handle, char *d_input_string, size_t input_size,
-    int *d_matched_result) ;
-} 
-#endif // __cplusplus
-
-
-#define THREAD_BLOCK_EXP   (8)
-#define EXTRA_SIZE_PER_TB  (128)
-#define THREAD_BLOCK_SIZE  (1 << THREAD_BLOCK_EXP)
-
-#if THREAD_BLOCK_SIZE != 256 
-    #error THREAD_BLOCK_SIZE != 256 
-#endif
+PFAC_status_t  PFAC_kernel_timeDriven_wrapper( 
+    PFAC_handle_t handle, 
+    char *d_input_string, 
+    size_t input_size,
+    int *d_matched_result, 
+    int *d_num_matched) ;
+// } 
+// #endif // __cplusplus
 
 texture < int, 1, cudaReadModeElementType > tex_PFAC_table;
 
@@ -84,6 +79,9 @@ __global__ void PFAC_kernel_timeDriven(
     int initial_state, 
     int num_blocks_minus1,
     int *d_match_result );
+
+template <int BLOCKSIZE, int EXTRA_SIZE_TB>
+__global__ void PFAC_kernel_count ( size_t size, int *d_match_result, int *d_num_matched );
    
 //------------------- main function -----------------------
 
@@ -92,7 +90,8 @@ __host__  PFAC_status_t  PFAC_kernel_timeDriven_wrapper(
     PFAC_handle_t handle, 
     char *d_input_string, 
     size_t input_size,
-    int *d_matched_result )
+    int *d_matched_result,
+    int *d_num_matched )
 {
     cudaError_t cuda_status ;
     PFAC_status_t pfac_status = PFAC_STATUS_SUCCESS;
@@ -117,7 +116,7 @@ __host__  PFAC_status_t  PFAC_kernel_timeDriven_wrapper(
     if ( texture_on ){
         
         // #### lock mutex, only one thread can bind texture
-        pfac_status = PFAC_tex_mutex_lock();
+        pfac_status = PFAC_tex_mutex_lock(handle);
         if ( PFAC_STATUS_SUCCESS != pfac_status ){ 
             return pfac_status ;
         } 
@@ -141,7 +140,7 @@ __host__  PFAC_status_t  PFAC_kernel_timeDriven_wrapper(
             handle->sizeOfTableInBytes ) ;
 
         // #### unlock mutex
-        pfac_status = PFAC_tex_mutex_unlock();
+        pfac_status = PFAC_tex_mutex_unlock(handle);
         if ( PFAC_STATUS_SUCCESS != pfac_status ){ 
             return pfac_status ;
         }
@@ -167,11 +166,11 @@ __host__  PFAC_status_t  PFAC_kernel_timeDriven_wrapper(
     // num_blocks = # of thread blocks to cover input stream
     int num_blocks = (n_hat + THREAD_BLOCK_SIZE-1)/THREAD_BLOCK_SIZE ;
 
-    dim3  dimBlock( THREAD_BLOCK_SIZE, 1 ) ;
+    dim3  dimBlock( THREAD_BLOCK_SIZE ) ;
     dim3  dimGrid ;
 
     /* 
-     *  hardware limitatin of 2-D grid is (65535, 65535), 
+     *  hardware limitation of 2-D grid is (65535, 65535), 
      *  1-D grid is not enough to cover large input stream.
      *  For example, input_size = 1G (input stream has 1Gbyte), then 
      *  num_blocks = # of thread blocks = 1G / 1024 = 1M > 65535
@@ -230,26 +229,30 @@ __host__  PFAC_status_t  PFAC_kernel_timeDriven_wrapper(
 
     if ( texture_on ){
         // #### lock mutex, only one thread can unbind texture
-        pfac_status = PFAC_tex_mutex_lock();
+        pfac_status = PFAC_tex_mutex_lock(handle);
         if ( PFAC_STATUS_SUCCESS != pfac_status ){ 
             return pfac_status ;
         }
         cudaUnbindTexture(texRefTable);
         
         // #### unlock mutex
-        pfac_status = PFAC_tex_mutex_unlock();
+        pfac_status = PFAC_tex_mutex_unlock(handle);
         if ( PFAC_STATUS_SUCCESS != pfac_status ){ 
             return pfac_status ;
         }
     } 
+    if ( cudaSuccess != cuda_status ){
+        return PFAC_STATUS_INTERNAL_ERROR ;
+    }
 
+    PFAC_kernel_count<THREAD_BLOCK_SIZE, EXTRA_SIZE_PER_TB> <<< MAX_DIM_GRID, dimBlock >>> ( input_size, d_matched_result, d_num_matched );
+    cuda_status = cudaGetLastError() ;
     if ( cudaSuccess != cuda_status ){
         return PFAC_STATUS_INTERNAL_ERROR ;
     }
 
     return PFAC_STATUS_SUCCESS ;
 }
-
 
 
 /*
@@ -466,3 +469,46 @@ __global__ void PFAC_kernel_timeDriven(int *d_PFAC_table, int *d_input_string, i
     }
 }
 
+
+template <int BLOCKSIZE, int EXTRA_SIZE_TB>
+__global__ void PFAC_kernel_count ( size_t size, int *d_match_result, int *d_num_matched )
+{
+    unsigned tid = threadIdx.x;
+    unsigned id = tid + ( 2 * blockDim.x ) * blockIdx.x;        // halve the blocks
+
+    __shared__ int sdata[BLOCKSIZE + EXTRA_SIZE_PER_TB];
+
+    if ( id >= size )
+    {
+        sdata[tid] = 0;
+    }
+    else 
+    {
+        int d1 = d_match_result[id] > 0;
+        int d2 = ( id + blockDim.x ) >= size ? 0 : ( d_match_result[id + blockDim.x] > 0 );
+
+        // read global data to shared memory
+        // first level reduction
+        sdata[tid] = d1 + d2;
+    }
+    __syncthreads();
+
+    if ( id >= size ) 
+    {
+        return;
+    }
+
+    // reduce in block
+    for (unsigned s = blockDim.x / 2; s > 0; s >>= 1)
+    {
+        if ( tid < s ) {
+            sdata[tid] += sdata[tid + s];
+        }
+        __syncthreads();
+    }
+
+    if ( tid == 0 ) // block root
+    {
+        d_num_matched[blockIdx.x] = sdata[0];
+    }
+}

@@ -10,7 +10,7 @@ int main(int argc, char **argv)
     char dumpTableFile[] = "table.txt";
     char inputFile[2][40] = {"test/data/example_input", "test/data/example_input2"};
     char patternFile[] = "test/pattern/example_pattern";
-    PFAC_handle_t handles[2];
+    PFAC_handle_t handle;
     PFAC_status_t PFAC_status;
     int input_size[2];
     char *h_inputString[2] = {NULL,NULL};
@@ -29,23 +29,23 @@ int main(int argc, char **argv)
     }*/
 
     // step 2: read patterns and dump transition table 
-    for (int i = 0; i < 2; ++i) {
-        PFAC_status = PFAC_readPatternFromFile( handles[i], patternFile) ;
-        if ( PFAC_STATUS_SUCCESS != PFAC_status ){
-            printf("Error: fails to read pattern %d from file, %s\n", i, PFAC_getErrorString(PFAC_status) );
-            exit(1) ;   
-        }
-    }
+    // for (int i = 0; i < 2; ++i) {
+    //     PFAC_status = PFAC_readPatternFromFile( handles[i], patternFile) ;
+    //     if ( PFAC_STATUS_SUCCESS != PFAC_status ){
+    //         printf("Error: fails to read pattern %d from file, %s\n", i, PFAC_getErrorString(PFAC_status) );
+    //         exit(1) ;   
+    //     }
+    // }
 
     // dump transition table 
-     FILE *table_fp = fopen(dumpTableFile, "w");
-     assert(NULL != table_fp);
-     PFAC_status = PFAC_dumpTransitionTable( handles[0], table_fp );
-     fclose(table_fp);
-     if (PFAC_STATUS_SUCCESS != PFAC_status) {
-         printf("Error: fails to dump transition table, %s\n", PFAC_getErrorString(PFAC_status));
-         exit(1);
-     }
+    //  FILE *table_fp = fopen(dumpTableFile, "w");
+    //  assert(NULL != table_fp);
+    //  PFAC_status = PFAC_dumpTransitionTable( handles[0], table_fp );
+    //  fclose(table_fp);
+    //  if (PFAC_STATUS_SUCCESS != PFAC_status) {
+    //      printf("Error: fails to dump transition table, %s\n", PFAC_getErrorString(PFAC_status));
+    //      exit(1);
+    //  }
 
     //step 3: prepare input stream
     // FILE* fpin = fopen(inputFile, "rb");
@@ -123,13 +123,13 @@ int main(int argc, char **argv)
         puts("");
     }*/
 
-    for (int i = 0; i < 2; ++i) {
-        PFAC_status = PFAC_destroy( handles[i] ) ;
-        assert( PFAC_STATUS_SUCCESS == PFAC_status );
+    // for (int i = 0; i < 2; ++i) {
+    //     PFAC_status = PFAC_destroy( handles[i] ) ;
+    //     assert( PFAC_STATUS_SUCCESS == PFAC_status );
     
-        free(h_inputString[i]);
-        free(h_matched_result[i]);
-    }
+    //     free(h_inputString[i]);
+    //     free(h_matched_result[i]);
+    // }
 
     return 0;
 }

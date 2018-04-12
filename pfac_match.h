@@ -3,9 +3,9 @@
 
 #include "pfac.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif   // __cplusplus
+// #ifdef __cplusplus
+// extern "C" {
+// #endif   // __cplusplus
 
 /*
  *  platform is immaterial, do matching on GPU
@@ -26,9 +26,9 @@ extern PFAC_status_t  PFAC_kernel_timeDriven_wrapper( PFAC_handle_t handle, char
     int *d_matched_result) ;
 
 
-#ifdef __cplusplus
-}
-#endif   // __cplusplus
+// #ifdef __cplusplus
+// }
+// #endif   // __cplusplus
 
 
 #endif   // PFAC_MATCH_H_

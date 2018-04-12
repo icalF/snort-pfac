@@ -3,9 +3,9 @@
 
 #include "pfac.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif   // __cplusplus
+// #ifdef __cplusplus
+// extern "C" {
+// #endif   // __cplusplus
 
 /*
  *  return
@@ -40,9 +40,9 @@ PFAC_status_t  PFAC_readPatternFromFile( PFAC_handle_t handle, char *filename );
 PFAC_status_t parsePatternFile( char *patternFileName, char ***rowPtr, char **patternPool,
     int **patternID_table_ptr, int **patternLen_table_ptr, int *max_state_num_ptr, int *pattern_num_ptr ) ;
 
-#ifdef __cplusplus
-}
-#endif   // __cplusplus
+// #ifdef __cplusplus
+// }
+// #endif   // __cplusplus
 
 
 #endif   // PFAC_FILE_H_

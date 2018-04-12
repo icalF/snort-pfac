@@ -15,6 +15,13 @@ static inline void ConvertCaseEx (unsigned char *d, unsigned char *s, int m)
     }
 }
 
+extern __host__ PFAC_status_t  PFAC_kernel_timeDriven_wrapper( 
+    PFAC_handle_t handle, 
+    char *d_input_string, 
+    size_t input_size,
+    int *d_matched_result,
+    int *d_num_matched );
+
  PFAC_status_t  PFAC_destroy( PFAC_handle_t handle )
 {
     if ( NULL == handle ){
@@ -105,14 +112,11 @@ void  PFAC_freeTable( PFAC_handle_t handle )
     }   
 }
 
-/* warpper for pthread_mutex_lock and pthread_mutex_unlock */
-mutex  __pfac_tex_mutex;    
-
-PFAC_status_t PFAC_tex_mutex_lock(void)
+PFAC_status_t PFAC_tex_mutex_lock(PFAC_handle_t handle)
 {
     try
     {
-        __pfac_tex_mutex.lock();
+        handle->__pfac_tex_mutex.lock();
     }
     catch (const system_error &e)
     {
@@ -122,11 +126,11 @@ PFAC_status_t PFAC_tex_mutex_lock(void)
     return PFAC_STATUS_SUCCESS;
 }
 
-PFAC_status_t PFAC_tex_mutex_unlock(void)
+PFAC_status_t PFAC_tex_mutex_unlock(PFAC_handle_t handle)
 {
     try
     {
-        __pfac_tex_mutex.unlock();
+        handle->__pfac_tex_mutex.unlock();
     }
     catch (const system_error &e)
     {
