@@ -226,7 +226,93 @@ int pfacAddPattern ( PFAC_STRUCT * p, unsigned char *pat, int n, int nocase,
     plist->next = p->pfacPatterns;
     p->pfacPatterns = plist;
     p->numOfPatterns++;
+    p->max_numOfStates += n + 1;
     return 0;
+}
+
+
+int pfacCompile ( PFAC_STRUCT * pfac,
+        int (*build_tree)(void * id, void **existing_tree),
+        int (*neg_list_func)(void *id, void **list))
+{
+    int max_numOfStates = pfac->max_numOfStates;
+
+    // Allocate a buffer to contains all patterns
+    pfac->valPtr = (char*)malloc(sizeof(char)*max_numOfStates);
+    if (NULL == pfac->valPtr) {
+        return PFAC_STATUS_ALLOC_FAILED;
+    }
+
+    /* Copy all patterns into the buffer */
+    PFAC_PATTERN *plist;
+    char *offset;
+    for (plist = pfac->pfacPatterns, offset = pfac->valPtr + 1;
+         plist != NULL; 
+         offset += plist->n + 1, plist = plist->next)
+    {
+        memcpy(offset, plist->patrn, plist->n);
+    }
+
+    char *buffer = pfac->valPtr;
+    vector< struct patternEle > rowIdxArray;
+    vector<int>  patternLenArray;
+    int len;
+
+    struct patternEle pEle;
+
+    pEle.patternString = buffer;
+    pEle.patternID = 1;
+
+    rowIdxArray.push_back(pEle);
+    len = 0;
+    for (int i = 0; i < max_numOfStates; i++) {
+        if (( '\n' == buffer[i] ) || ( '\0' == buffer[i]) ) {
+            if (( i > 0 ) && ( '\n' != buffer[i - 1] ) && ( '\0' != buffer[i - 1] )) { // non-empty line
+                patternLenArray.push_back(len);
+                pEle.patternString = buffer + i + 1; // start of next pattern
+                pEle.patternID = rowIdxArray.size() + 1; // ID of next pattern
+                rowIdxArray.push_back(pEle);
+            }
+            len = 0;
+        }
+        else {
+            len++;
+        }
+    }
+
+    // rowIdxArray.size()-1 = number of patterns
+    // sort patterns by lexicographic order
+    sort(rowIdxArray.begin(), rowIdxArray.begin() + pfac->numOfPatterns, pattern_cmp_functor());
+
+    pfac->rowPtr = (char**)malloc(sizeof(char*)*rowIdxArray.size());
+    pfac->patternID_table = (int*)malloc(sizeof(int)*rowIdxArray.size());
+    // suppose there are k patterns, then size of patternLen_table is k+1
+    // because patternLen_table[0] is useless, valid data starts from
+    // patternLen_table[1], up to patternLen_table[k]
+    pfac->patternLen_table = (int*)malloc(sizeof(int)*rowIdxArray.size());
+    if ((NULL == pfac->rowPtr) ||
+        (NULL == pfac->patternID_table) ||
+        (NULL == pfac->patternLen_table))
+    {
+        return PFAC_STATUS_ALLOC_FAILED;
+    }
+
+    // Compute f(final state) = patternID
+    for (int i = 0; i < (rowIdxArray.size() - 1); i++) {
+        pfac->rowPtr[i] = rowIdxArray[i].patternString;
+        pfac->patternID_table[i] = rowIdxArray[i].patternID; // pattern number starts from 1
+    }
+
+    // although patternLen_table[0] is useless, in order to avoid errors from valgrind
+    // we need to initialize patternLen_table[0]
+    pfac->patternLen_table[0] = 0;
+    for (int i = 0; i < (rowIdxArray.size() - 1); i++) {
+        // pattern (*rowPtr)[i] is terminated by character '\n'
+        // pattern ID starts from 1, so patternID = i+1
+        pfac->patternLen_table[i + 1] = patternLenArray[i];
+    }
+
+    return PFAC_STATUS_SUCCESS;
 }
 
 int pfacSearch ( PFAC_STRUCT * pfac,unsigned char * T, int n, 
