@@ -259,7 +259,7 @@ struct PFAC_STRUCT {
                          * we can call a kernel with smem
                          */
                              
-    int  max_numOfStates ; // maximum number of states, this is an estimated number from size of pattern file
+    int  max_numOfStates = 1 ; // maximum number of states, this is an estimated number from size of pattern file
     int  numOfPatterns ;  // number of patterns
     int  numOfStates ; // total number of states in the DFA, states are labelled as s0, s1, ..., s{state_num-1}
     int  numOfFinalStates ; // number of final states
