@@ -436,22 +436,22 @@ PFAC_status_t  PFAC_create2DTable( PFAC_handle_t handle )
         }
     }
 
-    // cudaError_t cuda_status = cudaMalloc((void **) &handle->d_PFAC_table, handle->sizeOfTableInBytes );
-    // if ( cudaSuccess != cuda_status ){
-    //     free(handle->h_PFAC_table);
-    //     handle->h_PFAC_table = NULL ;
-    //     return PFAC_STATUS_CUDA_ALLOC_FAILED ;
-    // }
+     cudaError_t cuda_status = cudaMalloc((void **) &handle->d_PFAC_table, handle->sizeOfTableInBytes );
+     if ( cudaSuccess != cuda_status ){
+         free(handle->h_PFAC_table);
+         handle->h_PFAC_table = NULL ;
+         return PFAC_STATUS_CUDA_ALLOC_FAILED ;
+     }
 
-    // cuda_status = cudaMemcpy(handle->d_PFAC_table, handle->h_PFAC_table,
-    //     handle->sizeOfTableInBytes, cudaMemcpyHostToDevice);
-    // if ( cudaSuccess != cuda_status ){
-    //     free(handle->h_PFAC_table);
-    //     handle->h_PFAC_table = NULL ;
-    //     cudaFree(handle->d_PFAC_table);
-    //     handle->d_PFAC_table = NULL;        
-    //     return PFAC_STATUS_INTERNAL_ERROR ;
-    // }
+     cuda_status = cudaMemcpy(handle->d_PFAC_table, handle->h_PFAC_table,
+         handle->sizeOfTableInBytes, cudaMemcpyHostToDevice);
+     if ( cudaSuccess != cuda_status ){
+         free(handle->h_PFAC_table);
+         handle->h_PFAC_table = NULL ;
+         cudaFree(handle->d_PFAC_table);
+         handle->d_PFAC_table = NULL;        
+         return PFAC_STATUS_INTERNAL_ERROR ;
+     }
     
     return PFAC_STATUS_SUCCESS ;
 }

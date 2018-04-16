@@ -1,6 +1,8 @@
 #ifndef PFAC_TABLE_H_
 #define PFAC_TABLE_H_
 
+#include <ctype.h>
+
 #include "pfac.h"
 
 #ifdef __cplusplus

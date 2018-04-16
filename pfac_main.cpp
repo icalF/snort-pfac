@@ -14,8 +14,8 @@ int MatchFound (void * id, void *tree, int index, void *data, void *neg_list)
 int main(int argc, char **argv)
 {
     char dumpTableFile[] = "table.txt";
-    char inputFile[] = "/home/xtremax/spfac-nv/test/data/example_input";
-    char patternFile[] = "/home/xtremax/spfac-nv/test/pattern/example_pattern";
+    char inputFile[] = "D:\\Projects\\spfac-nv\\test\\data\\example_input2";
+    char patternFile[] = "D:\\Projects\\spfac-nv\\test\\pattern\\example_pattern";
     PFAC_STRUCT *pfac;
     PFAC_status_t PFAC_status;
     int input_size;
