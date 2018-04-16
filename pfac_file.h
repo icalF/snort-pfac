@@ -25,20 +25,7 @@
  */
 PFAC_status_t  PFAC_readPatternFromFile( PFAC_handle_t handle, char *filename );
 
-/*
- *  parse pattern file "patternFileName",
- *  (1) store all patterns in "patternPool" and
- *  (2) reorder the patterns according to lexicographic order and store
- *      reordered pointer in "rowPtr"
- *  (3) record original pattern ID in "patternID_table = *patternID_table_ptr"
- *  (4) record pattern length in "patternLen_table = *patternLen_table_ptr"
- *
- *  (5) *pattern_num_ptr = number of patterns
- *  (6) *max_state_num_ptr = estimation (upper bound) of total states in PFAC DFA
- *
- */
-PFAC_status_t parsePatternFile( char *patternFileName, char ***rowPtr, char **patternPool,
-    int **patternID_table_ptr, int **patternLen_table_ptr, int *max_state_num_ptr, int *pattern_num_ptr ) ;
+PFAC_status_t parsePatternFile( PFAC_handle_t handle, char *patternfilename );
 
 // #ifdef __cplusplus
 // }

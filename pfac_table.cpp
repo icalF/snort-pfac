@@ -1,3 +1,5 @@
+#include <algorithm>
+#include <cctype>
 #include <cstdio>
 #include <cassert>
 
@@ -27,6 +29,187 @@ int lookup(vector< vector<TableEle> > &table, const int state, const int ch)
         }
     }
     return TRAP_STATE;
+}
+
+/* Custom comparator */
+struct pattern_cmp_functor {
+
+    // pattern *s and *t are terminated by character '\n'
+    // strict weak ordering
+    // return true if the first argument goes before the second argument
+    bool operator()( patternEle pattern_s, patternEle pattern_t ){
+        char s_char, t_char ;
+        bool s_end, t_end ;
+        char *s_sweep = pattern_s.patternString;
+        char *t_sweep = pattern_t.patternString;
+
+        while(1) {
+            s_char = *s_sweep++ ;
+            t_char = *t_sweep++ ;
+            s_end = ('\n' == s_char) ;
+            t_end = ('\n' == t_char) ;
+
+            if ( s_end || t_end ){ break ; }
+
+            if (s_char < t_char){
+                return true ;
+            } else if ( s_char > t_char ){
+                return false ;
+            }
+        }
+
+        if (s_end == t_end) { // pattern s is the same as pattern t, the order is don't care
+            return true;
+        }
+        else if (s_end) { // pattern s is prefix of pattern t
+            return true;
+        }
+        else {
+            return false; // pattern t is prefix of pattern s
+        }
+    }
+}; 
+
+/*
+ *  fill pattern table,
+ *  (1) store all patterns in "patternPool" and
+ *  (2) reorder the patterns according to lexicographic order and store
+ *      reordered pointer in "rowPtr"
+ *  (3) record original pattern ID in "patternID_table = *patternID_table_ptr"
+ *  (4) record pattern length in "patternLen_table = *patternLen_table_ptr"
+ *
+ *  (5) *pattern_num_ptr = number of patterns
+ *  (6) *max_state_num_ptr = estimation (upper bound) of total states in PFAC DFA
+ *
+ */
+PFAC_status_t PFAC_fillPatternTable ( PFAC_handle_t handle )
+{
+    if ( handle->valPtr == NULL ) {
+        return PFAC_STATUS_INVALID_PARAMETER;
+    }
+
+    int max_numOfStates = handle->max_numOfStates;
+    char *buffer = handle->valPtr;
+    vector< struct patternEle > rowIdxArray;
+    vector<int>  patternLenArray;
+    int len;
+
+    struct patternEle pEle;
+
+    pEle.patternString = buffer;
+    pEle.patternID = 1;
+
+    rowIdxArray.push_back(pEle);
+    len = 0;
+    for (int i = 0; i < max_numOfStates; i++) {
+        if (( '\n' == buffer[i] ) || ( '\0' == buffer[i]) ) {
+            if (( i > 0 ) && ( '\n' != buffer[i - 1] ) && ( '\0' != buffer[i - 1] )) { // non-empty line
+                patternLenArray.push_back(len);
+                pEle.patternString = buffer + i + 1; // start of next pattern
+                pEle.patternID = rowIdxArray.size() + 1; // ID of next pattern
+                rowIdxArray.push_back(pEle);
+            }
+            len = 0;
+        }
+        else {
+            len++;
+        }
+    }
+
+    // rowIdxArray.size()-1 = number of patterns
+    // sort patterns by lexicographic order
+    std::sort(rowIdxArray.begin(), rowIdxArray.begin() + handle->numOfPatterns, pattern_cmp_functor());
+
+    handle->rowPtr = (char**)malloc(sizeof(char*)*rowIdxArray.size());
+    handle->patternID_table = (int*)malloc(sizeof(int)*rowIdxArray.size());
+    // suppose there are k patterns, then size of patternLen_table is k+1
+    // because patternLen_table[0] is useless, valid data starts from
+    // patternLen_table[1], up to patternLen_table[k]
+    handle->patternLen_table = (int*)malloc(sizeof(int)*rowIdxArray.size());
+    if ((NULL == handle->rowPtr) ||
+        (NULL == handle->patternID_table) ||
+        (NULL == handle->patternLen_table))
+    {
+        return PFAC_STATUS_ALLOC_FAILED;
+    }
+
+    // Compute f(final state) = patternID
+    for (int i = 0; i < (rowIdxArray.size() - 1); i++) {
+        handle->rowPtr[i] = rowIdxArray[i].patternString;
+        handle->patternID_table[i] = rowIdxArray[i].patternID; // pattern number starts from 1
+    }
+
+    // although patternLen_table[0] is useless, in order to avoid errors from valgrind
+    // we need to initialize patternLen_table[0]
+    handle->patternLen_table[0] = 0;
+    for (int i = 0; i < (rowIdxArray.size() - 1); i++) {
+        // pattern (*rowPtr)[i] is terminated by character '\n'
+        // pattern ID starts from 1, so patternID = i+1
+        handle->patternLen_table[i + 1] = patternLenArray[i];
+    }
+
+    return PFAC_STATUS_SUCCESS;
+}
+
+/*
+ *  Prepare DFA transition table
+ *  given sorted "patternListTable" 
+ *
+ */
+PFAC_status_t PFAC_prepareTable ( PFAC_handle_t handle )
+{
+    int pattern_num = handle->numOfPatterns ;
+    
+    // compute maximum pattern length
+    handle->maxPatternLen = 0 ;
+    for(int i = 1 ; i <= pattern_num ; i++ ){
+        if ( handle->maxPatternLen < (handle->patternLen_table)[i] ){
+            handle->maxPatternLen = (handle->patternLen_table)[i];
+        }
+    }
+
+    handle->initial_state  = handle->numOfPatterns + 1 ;
+    handle->numOfFinalStates = handle->numOfPatterns ;
+
+    // step 2: create PFAC table
+    handle->table_compact = new vector< vector<TableEle> > ;
+    if ( NULL == handle->table_compact ){
+        PFAC_freeResource( handle );
+        return PFAC_STATUS_ALLOC_FAILED ;
+    }
+    
+    int baseOfUsableStateID = handle->initial_state + 1 ; // assume initial_state = handle->numOfFinalStates + 1
+    PFAC_status_t status = create_PFACTable_spaceDriven((const char**)handle->rowPtr,
+        (const int*)handle->patternLen_table, (const int*)handle->patternID_table,
+        handle->max_numOfStates, handle->numOfPatterns, handle->initial_state, baseOfUsableStateID, 
+        &handle->numOfStates, *(handle->table_compact) );
+
+    if ( PFAC_STATUS_SUCCESS != status ){
+        PFAC_freeResource( handle );
+        return status ;
+    }
+    
+    // compute numOfLeaves = number of leaf nodes
+    // leaf node only appears in the final states
+    handle->numOfLeaves = 0 ;
+    for(int i = 1 ; i <= handle->numOfPatterns ; i++ ){
+        // s0 is useless, so ignore s0
+        if ( 0 == (*handle->table_compact)[i].size() ){
+            handle->numOfLeaves ++ ;    
+        }
+    }
+    
+    // step 3: copy data to device memory
+    handle->isPatternsReady = true ;
+
+    status = PFAC_bindTable( handle ) ;
+    if ( PFAC_STATUS_SUCCESS != status) {
+        PFAC_freeResource( handle );
+        handle->isPatternsReady = false ;
+        return status ;
+    }
+        
+    return status ;
 }
 
 /*
@@ -253,22 +436,22 @@ PFAC_status_t  PFAC_create2DTable( PFAC_handle_t handle )
         }
     }
 
-    cudaError_t cuda_status = cudaMalloc((void **) &handle->d_PFAC_table, handle->sizeOfTableInBytes );
-    if ( cudaSuccess != cuda_status ){
-        free(handle->h_PFAC_table);
-        handle->h_PFAC_table = NULL ;
-        return PFAC_STATUS_CUDA_ALLOC_FAILED ;
-    }
+    // cudaError_t cuda_status = cudaMalloc((void **) &handle->d_PFAC_table, handle->sizeOfTableInBytes );
+    // if ( cudaSuccess != cuda_status ){
+    //     free(handle->h_PFAC_table);
+    //     handle->h_PFAC_table = NULL ;
+    //     return PFAC_STATUS_CUDA_ALLOC_FAILED ;
+    // }
 
-    cuda_status = cudaMemcpy(handle->d_PFAC_table, handle->h_PFAC_table,
-        handle->sizeOfTableInBytes, cudaMemcpyHostToDevice);
-    if ( cudaSuccess != cuda_status ){
-        free(handle->h_PFAC_table);
-        handle->h_PFAC_table = NULL ;
-        cudaFree(handle->d_PFAC_table);
-        handle->d_PFAC_table = NULL;        
-        return PFAC_STATUS_INTERNAL_ERROR ;
-    }
+    // cuda_status = cudaMemcpy(handle->d_PFAC_table, handle->h_PFAC_table,
+    //     handle->sizeOfTableInBytes, cudaMemcpyHostToDevice);
+    // if ( cudaSuccess != cuda_status ){
+    //     free(handle->h_PFAC_table);
+    //     handle->h_PFAC_table = NULL ;
+    //     cudaFree(handle->d_PFAC_table);
+    //     handle->d_PFAC_table = NULL;        
+    //     return PFAC_STATUS_INTERNAL_ERROR ;
+    // }
     
     return PFAC_STATUS_SUCCESS ;
 }

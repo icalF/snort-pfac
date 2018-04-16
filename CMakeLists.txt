@@ -6,12 +6,12 @@ project ("PFAC-CUDA" LANGUAGES CXX CUDA)
 
 add_executable(playground icalcu.cu)
 
-add_executable(pfac pfac_main.cu
+add_executable(pfac pfac_main.cpp
 					pfac.cu
 					pfac_match.cu
-					pfac_table.cu
-					pfac_file.cu
-					pfac_kernel.cu)
+					pfac_table.cpp
+					pfac_kernel.cu
+					pfac_file.cpp)
 
 #target_compile_features(ac PUBLIC cxx_std_11)
 

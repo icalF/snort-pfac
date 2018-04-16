@@ -80,7 +80,7 @@ __global__ void PFAC_kernel_timeDriven(
     int num_blocks_minus1,
     int *d_match_result );
 
-template <int BLOCKSIZE, int EXTRA_SIZE_TB>
+template <int BLOCKSIZE>
 __global__ void PFAC_kernel_count ( size_t size, int *d_match_result, int *d_num_matched );
    
 //------------------- main function -----------------------
@@ -166,7 +166,7 @@ __host__  PFAC_status_t  PFAC_kernel_timeDriven_wrapper(
     // num_blocks = # of thread blocks to cover input stream
     int num_blocks = (n_hat + THREAD_BLOCK_SIZE-1)/THREAD_BLOCK_SIZE ;
 
-    dim3  dimBlock( THREAD_BLOCK_SIZE ) ;
+    dim3  dimBlock( THREAD_BLOCK_SIZE, 1 ) ;
     dim3  dimGrid ;
 
     /* 
@@ -226,6 +226,10 @@ __host__  PFAC_status_t  PFAC_kernel_timeDriven_wrapper(
     }
 
     cuda_status = cudaGetLastError() ;
+    if ( cudaSuccess != cuda_status ){
+        PFAC_PRINTF("\n\nCUDA error: %s\n\n", cudaGetErrorString(cuda_status));
+        return PFAC_STATUS_INTERNAL_ERROR ;
+    }
 
     if ( texture_on ){
         // #### lock mutex, only one thread can unbind texture
@@ -245,7 +249,7 @@ __host__  PFAC_status_t  PFAC_kernel_timeDriven_wrapper(
         return PFAC_STATUS_INTERNAL_ERROR ;
     }
 
-    PFAC_kernel_count<THREAD_BLOCK_SIZE, EXTRA_SIZE_PER_TB> <<< MAX_DIM_GRID, dimBlock >>> ( input_size, d_matched_result, d_num_matched );
+    PFAC_kernel_count<THREAD_BLOCK_SIZE> <<< dimGrid, dimBlock >>> ( input_size, d_matched_result, d_num_matched );
     cuda_status = cudaGetLastError() ;
     if ( cudaSuccess != cuda_status ){
         return PFAC_STATUS_INTERNAL_ERROR ;
@@ -470,13 +474,16 @@ __global__ void PFAC_kernel_timeDriven(int *d_PFAC_table, int *d_input_string, i
 }
 
 
-template <int BLOCKSIZE, int EXTRA_SIZE_TB>
+template <int BLOCKSIZE>
 __global__ void PFAC_kernel_count ( size_t size, int *d_match_result, int *d_num_matched )
 {
     unsigned tid = threadIdx.x;
     unsigned id = tid + ( 2 * blockDim.x ) * blockIdx.x;        // halve the blocks
 
-    __shared__ int sdata[BLOCKSIZE + EXTRA_SIZE_PER_TB];
+    __shared__ int sdata[BLOCKSIZE];
+
+    if (tid == 0)
+    PFAC_PRINTF("\n%d\n", size);
 
     if ( id >= size )
     {

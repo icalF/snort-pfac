@@ -1,10 +1,10 @@
+#include <cstring>
+
 #include "cuda_utils.h"
 
 #include "pfac.h"
 #include "pfac_match.h"
 #include "pfac_table.h"
-
-using namespace std;
 
 static inline void ConvertCaseEx (unsigned char *d, unsigned char *s, int m)
 {
@@ -15,21 +15,14 @@ static inline void ConvertCaseEx (unsigned char *d, unsigned char *s, int m)
     }
 }
 
-extern __host__ PFAC_status_t  PFAC_kernel_timeDriven_wrapper( 
-    PFAC_handle_t handle, 
-    char *d_input_string, 
-    size_t input_size,
-    int *d_matched_result,
-    int *d_num_matched );
 
- PFAC_status_t  PFAC_destroy( PFAC_handle_t handle )
+PFAC_status_t  PFAC_destroy( PFAC_handle_t handle )
 {
     if ( NULL == handle ){
         return PFAC_STATUS_INVALID_HANDLE ;
     }
 
     PFAC_freeResource( handle ) ;
-
     free( handle ) ;
 
     return PFAC_STATUS_SUCCESS ;
@@ -75,15 +68,15 @@ void  PFAC_freeTable( PFAC_handle_t handle )
         handle->h_PFAC_table = NULL ;
     }
 
-    if ( NULL != handle->h_hashRowPtr ){
-        free( handle->h_hashRowPtr );
-        handle->h_hashRowPtr = NULL ;   
-    }
+    // if ( NULL != handle->h_hashRowPtr ){
+    //     free( handle->h_hashRowPtr );
+    //     handle->h_hashRowPtr = NULL ;   
+    // }
     
-    if ( NULL != handle->h_hashValPtr ){
-        free( handle->h_hashValPtr );
-        handle->h_hashValPtr = NULL ;   
-    }
+    // if ( NULL != handle->h_hashValPtr ){
+    //     free( handle->h_hashValPtr );
+    //     handle->h_hashValPtr = NULL ;   
+    // }
     
     if ( NULL != handle->h_tableOfInitialState){
         free(handle->h_tableOfInitialState);
@@ -96,15 +89,15 @@ void  PFAC_freeTable( PFAC_handle_t handle )
         handle->d_PFAC_table= NULL ;
     }
     
-    if ( NULL != handle->d_hashRowPtr ){
-        cudaFree( handle->d_hashRowPtr );
-        handle->d_hashRowPtr = NULL ;
-    }
+    // if ( NULL != handle->d_hashRowPtr ){
+    //     cudaFree( handle->d_hashRowPtr );
+    //     handle->d_hashRowPtr = NULL ;
+    // }
 
-    if ( NULL != handle->d_hashValPtr ){
-        cudaFree( handle->d_hashValPtr );
-        handle->d_hashValPtr = NULL ;   
-    }
+    // if ( NULL != handle->d_hashValPtr ){
+    //     cudaFree( handle->d_hashValPtr );
+    //     handle->d_hashValPtr = NULL ;   
+    // }
     
     if ( NULL != handle->d_tableOfInitialState ){
         cudaFree(handle->d_tableOfInitialState);
@@ -114,42 +107,34 @@ void  PFAC_freeTable( PFAC_handle_t handle )
 
 PFAC_status_t PFAC_tex_mutex_lock(PFAC_handle_t handle)
 {
-    try
-    {
-        handle->__pfac_tex_mutex.lock();
-    }
-    catch (const system_error &e)
-    {
-        return PFAC_STATUS_MUTEX_ERROR;
-    }
+    // try
+    // {
+    //     handle->__pfac_tex_mutex.lock();
+    // }
+    // catch (const system_error &e)
+    // {
+    //     return PFAC_STATUS_MUTEX_ERROR;
+    // }
 
     return PFAC_STATUS_SUCCESS;
 }
 
 PFAC_status_t PFAC_tex_mutex_unlock(PFAC_handle_t handle)
 {
-    try
-    {
-        handle->__pfac_tex_mutex.unlock();
-    }
-    catch (const system_error &e)
-    {
-        return PFAC_STATUS_MUTEX_ERROR;
-    }
+    // try
+    // {
+    //     handle->__pfac_tex_mutex.unlock();
+    // }
+    // catch (const system_error &e)
+    // {
+    //     return PFAC_STATUS_MUTEX_ERROR;
+    // }
 
     return PFAC_STATUS_SUCCESS;
 }
 
 PFAC_status_t  PFAC_create( PFAC_handle_t handle )
 {
-    handle = (PFAC_handle_t) malloc( sizeof(PFAC_STRUCT) ) ;
-
-    if ( NULL == handle ){
-        return PFAC_STATUS_ALLOC_FAILED ;
-    }
-
-    memset( handle, 0, sizeof(PFAC_STRUCT) ) ;
-
     int device ;
     cudaError_t cuda_status = cudaGetDevice( &device ) ;
     if ( cudaSuccess != cuda_status ){
@@ -162,7 +147,6 @@ PFAC_status_t  PFAC_create( PFAC_handle_t handle )
     PFAC_PRINTF("major = %d, minor = %d, name=%s\n", deviceProp.major, deviceProp.minor, deviceProp.name );
 
     int device_no = 10*deviceProp.major + deviceProp.minor ;
-    
     handle->device_no = device_no ;
 
     // Find entry point of PFAC_kernel
@@ -175,13 +159,21 @@ PFAC_status_t  PFAC_create( PFAC_handle_t handle )
     return PFAC_STATUS_SUCCESS ;
 }
 
+
+
 PFAC_STRUCT * pfacNew (void (*userfree)(void *p),
         void (*optiontreefree)(void **p),
         void (*neg_list_free)(void **p))
 {
-    PFAC_handle_t handle;
-    PFAC_status_t status = PFAC_create( handle );
+    PFAC_handle_t handle = (PFAC_handle_t) malloc( sizeof(PFAC_STRUCT) ) ;
+    if ( handle == NULL ){
+        PFAC_PRINTF("Error: cannot initialize handler, error = %s\n", PFAC_getErrorString(PFAC_STATUS_ALLOC_FAILED));
+        return NULL;
+    }
 
+    memset( handle, 0, sizeof(PFAC_STRUCT) ) ;
+
+    PFAC_status_t status = PFAC_create( handle );
     if ( status != PFAC_STATUS_SUCCESS )
     {
         PFAC_PRINTF("Error: cannot initialize handler, error = %s\n", PFAC_getErrorString(status));
@@ -201,6 +193,7 @@ void pfacFree ( PFAC_STRUCT * pfac )
 {
     PFAC_handle_t handle = (PFAC_handle_t) pfac;
     PFAC_status_t status = PFAC_destroy( handle ) ;
+    PFAC_PRINTF("%d\n", handle);
     if ( status != PFAC_STATUS_SUCCESS )
     {
         PFAC_PRINTF("Error: cannot deinitialize handler, error = %s\n", PFAC_getErrorString(status));
@@ -228,6 +221,7 @@ int pfacAddPattern ( PFAC_STRUCT * p, unsigned char *pat, int n, int nocase,
     plist->depth = depth;
     plist->iid = iid;
     plist->next = p->pfacPatterns;
+    
     p->pfacPatterns = plist;
     p->numOfPatterns++;
     p->max_numOfStates += n + 1;
@@ -257,66 +251,21 @@ int pfacCompile ( PFAC_STRUCT * pfac,
         memcpy(offset, plist->patrn, plist->n);
     }
 
-    char *buffer = pfac->valPtr;
-    vector< struct patternEle > rowIdxArray;
-    vector<int>  patternLenArray;
-    int len;
-
-    struct patternEle pEle;
-
-    pEle.patternString = buffer;
-    pEle.patternID = 1;
-
-    rowIdxArray.push_back(pEle);
-    len = 0;
-    for (int i = 0; i < max_numOfStates; i++) {
-        if (( '\n' == buffer[i] ) || ( '\0' == buffer[i]) ) {
-            if (( i > 0 ) && ( '\n' != buffer[i - 1] ) && ( '\0' != buffer[i - 1] )) { // non-empty line
-                patternLenArray.push_back(len);
-                pEle.patternString = buffer + i + 1; // start of next pattern
-                pEle.patternID = rowIdxArray.size() + 1; // ID of next pattern
-                rowIdxArray.push_back(pEle);
-            }
-            len = 0;
-        }
-        else {
-            len++;
-        }
+    PFAC_status_t status = PFAC_fillPatternTable((PFAC_handle_t) pfac);
+    if ( status != PFAC_STATUS_SUCCESS ) {
+        PFAC_PRINTF("Error: fails to PFAC_fillPatternTable, %s\n", PFAC_getErrorString(status) );
+        PFAC_freeResource( (PFAC_handle_t) pfac );
+        return 0;
     }
 
-    // rowIdxArray.size()-1 = number of patterns
-    // sort patterns by lexicographic order
-    sort(rowIdxArray.begin(), rowIdxArray.begin() + pfac->numOfPatterns, pattern_cmp_functor());
-
-    pfac->rowPtr = (char**)malloc(sizeof(char*)*rowIdxArray.size());
-    pfac->patternID_table = (int*)malloc(sizeof(int)*rowIdxArray.size());
-    // suppose there are k patterns, then size of patternLen_table is k+1
-    // because patternLen_table[0] is useless, valid data starts from
-    // patternLen_table[1], up to patternLen_table[k]
-    pfac->patternLen_table = (int*)malloc(sizeof(int)*rowIdxArray.size());
-    if ((NULL == pfac->rowPtr) ||
-        (NULL == pfac->patternID_table) ||
-        (NULL == pfac->patternLen_table))
-    {
-        return PFAC_STATUS_ALLOC_FAILED;
+    status = PFAC_prepareTable((PFAC_handle_t) pfac);
+    if ( status != PFAC_STATUS_SUCCESS ) {
+        PFAC_PRINTF("Error: fails to PFAC_prepareTable, %s\n", PFAC_getErrorString(status) );
+        PFAC_freeResource( (PFAC_handle_t) pfac );
+        return 0;
     }
 
-    // Compute f(final state) = patternID
-    for (int i = 0; i < (rowIdxArray.size() - 1); i++) {
-        pfac->rowPtr[i] = rowIdxArray[i].patternString;
-        pfac->patternID_table[i] = rowIdxArray[i].patternID; // pattern number starts from 1
-    }
-
-    // although patternLen_table[0] is useless, in order to avoid errors from valgrind
-    // we need to initialize patternLen_table[0]
-    pfac->patternLen_table[0] = 0;
-    for (int i = 0; i < (rowIdxArray.size() - 1); i++) {
-        // pattern (*rowPtr)[i] is terminated by character '\n'
-        // pattern ID starts from 1, so patternID = i+1
-        pfac->patternLen_table[i + 1] = patternLenArray[i];
-    }
-
-    return PFAC_STATUS_SUCCESS;
+    return 0;
 }
 
 int pfacSearch ( PFAC_STRUCT * pfac,unsigned char * T, int n, 
@@ -324,20 +273,23 @@ int pfacSearch ( PFAC_STRUCT * pfac,unsigned char * T, int n,
         void * data, int* current_state )
 {
     int *h_matched_result = (int *) malloc ( n * sizeof(int) );
+    int *h_num_matched = (int *) malloc ( THREAD_BLOCK_SIZE * sizeof(int) );
     int nfound = 0;
     PFAC_handle_t handle = (PFAC_handle_t) pfac;
 
-    PFAC_status_t status = PFAC_matchFromHost( handle, (char *) T, n, h_matched_result ) ;
+    PFAC_status_t status = PFAC_matchFromHost( handle, (char *) T, n, h_matched_result, h_num_matched ) ;
 
     if ( status != PFAC_STATUS_SUCCESS ) {
         PFAC_PRINTF("Error: fails to PFAC_matchFromHost, %s\n", PFAC_getErrorString(status) );
         return 0;
     }
 
-    for (int i = 0; i < n; ++i)
+    #pragma omp parallel for reduction (+:nfound)
+    for (int i = 0; i < THREAD_BLOCK_SIZE; ++i)
     {
-        nfound += (h_matched_result[i] > 0);
+        nfound += h_num_matched[i];
     }
+
     return nfound;
 }
 

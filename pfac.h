@@ -42,7 +42,7 @@ using namespace std;
 #ifndef DEBUG 
 # define PFAC_PRINTF(...)
 #else
-# define PFAC_PRINTF( ... ) printf( __VA_ARGS__ )
+# define PFAC_PRINTF(...) printf( __VA_ARGS__ ); /*fflush(stdout);*/
 #endif
 
 /* maximum width for a 1D texture reference bound to linear memory, independent of size of element*/
@@ -195,8 +195,12 @@ PFAC_status_t PFAC_tex_mutex_lock(PFAC_handle_t handle);
 
 PFAC_status_t PFAC_tex_mutex_unlock(PFAC_handle_t handle);
 
-typedef PFAC_status_t (*PFAC_kernel_protoType)( PFAC_handle_t handle, char *d_input_string, size_t input_size,
-    int *d_matched_result ) ;
+typedef PFAC_status_t (*PFAC_kernel_protoType)( 
+    PFAC_handle_t handle, 
+    char *d_input_string, 
+    size_t input_size,
+    int *d_matched_result,
+    int *d_num_matched ) ;
 
 struct PFAC_STRUCT {
     // host
@@ -227,8 +231,8 @@ struct PFAC_STRUCT {
     
     int  *h_PFAC_table ; /* explicit 2-D table */
 
-    int2 *h_hashRowPtr ;
-    int2 *h_hashValPtr ;
+    // int2 *h_hashRowPtr ;
+    // int2 *h_hashValPtr ;
     int  *h_tableOfInitialState ;
     int  hash_p ; // p = 2^m + 1 
     int  hash_m ;
@@ -236,8 +240,8 @@ struct PFAC_STRUCT {
     // device
     int  *d_PFAC_table ; /* explicit 2-D table */
 
-    int2 *d_hashRowPtr ;
-    int2 *d_hashValPtr ;
+    // int2 *d_hashRowPtr ;
+    // int2 *d_hashValPtr ;
     int  *d_tableOfInitialState ; /* 256 transition function of initial state */
 
     size_t  numOfTableEntry ; 
@@ -259,7 +263,7 @@ struct PFAC_STRUCT {
                          * we can call a kernel with smem
                          */
                              
-    int  max_numOfStates = 1 ; // maximum number of states, this is an estimated number from size of pattern file
+    int  max_numOfStates = 00 ; // maximum number of states, this is an estimated number from size of pattern file
     int  numOfPatterns ;  // number of patterns
     int  numOfStates ; // total number of states in the DFA, states are labelled as s0, s1, ..., s{state_num-1}
     int  numOfFinalStates ; // number of final states
@@ -296,43 +300,6 @@ struct patternEle{
 };
 
 
-struct pattern_cmp_functor{
-
-    // pattern *s and *t are terminated by character '\n'
-    // strict weak ordering
-    // return true if the first argument goes before the second argument
-    bool operator()( patternEle pattern_s, patternEle pattern_t ){
-        char s_char, t_char ;
-        bool s_end, t_end ;
-        char *s_sweep = pattern_s.patternString;
-        char *t_sweep = pattern_t.patternString;
-
-        while(1)    {
-            s_char = *s_sweep++ ;
-            t_char = *t_sweep++ ;
-            s_end = ('\n' == s_char) ;
-            t_end = ('\n' == t_char) ;
-
-            if ( s_end || t_end ){ break ; }
-
-            if (s_char < t_char){
-                return true ;
-            }else if ( s_char > t_char ){
-                return false ;
-            }
-        }
-
-        if (s_end == t_end) { // pattern s is the same as pattern t, the order is don't care
-            return true;
-        }
-        else if (s_end) { // pattern s is prefix of pattern t
-            return true;
-        }
-        else {
-            return false; // pattern t is prefix of pattern s
-        }
-    }
-}; 
 
 /*
  *  return
@@ -357,31 +324,31 @@ static const char* PFAC_getErrorString( PFAC_status_t status )
     if ( PFAC_STATUS_SUCCESS == status ){
         return PFAC_success_str ;
     }
-    if ( PFAC_STATUS_BASE > status ){
-        return cudaGetErrorString( (cudaError_t) status ) ;
-    }
+    // if ( PFAC_STATUS_BASE > status ){
+    //     return cudaGetErrorString( (cudaError_t) status ) ;
+    // }
 
     switch(status){
-    case PFAC_STATUS_ALLOC_FAILED:
-        return PFAC_alloc_failed_str ;
-    case PFAC_STATUS_CUDA_ALLOC_FAILED:
-        return PFAC_cuda_alloc_failed_str;
-    case PFAC_STATUS_INVALID_HANDLE:
-        return PFAC_invalid_handle_str ;
-    case PFAC_STATUS_INVALID_PARAMETER:
-        return PFAC_invalid_parameter_str ;
-    case PFAC_STATUS_PATTERNS_NOT_READY:
-        return PFAC_patterns_not_ready_str ;
-    case PFAC_STATUS_FILE_OPEN_ERROR:
-        return PFAC_file_open_error_str ;
-    case PFAC_STATUS_LIB_NOT_EXIST:
-        return PFAC_lib_not_exist_str ;
-    case PFAC_STATUS_ARCH_MISMATCH:
-        return PFAC_arch_mismatch_str ;
-    case PFAC_STATUS_MUTEX_ERROR:
-        return PFAC_mutex_error ;
-    default : // PFAC_STATUS_INTERNAL_ERROR:
-        return PFAC_internal_error_str ;
+        case PFAC_STATUS_ALLOC_FAILED:
+            return PFAC_alloc_failed_str ;
+        case PFAC_STATUS_CUDA_ALLOC_FAILED:
+            return PFAC_cuda_alloc_failed_str;
+        case PFAC_STATUS_INVALID_HANDLE:
+            return PFAC_invalid_handle_str ;
+        case PFAC_STATUS_INVALID_PARAMETER:
+            return PFAC_invalid_parameter_str ;
+        case PFAC_STATUS_PATTERNS_NOT_READY:
+            return PFAC_patterns_not_ready_str ;
+        case PFAC_STATUS_FILE_OPEN_ERROR:
+            return PFAC_file_open_error_str ;
+        case PFAC_STATUS_LIB_NOT_EXIST:
+            return PFAC_lib_not_exist_str ;
+        case PFAC_STATUS_ARCH_MISMATCH:
+            return PFAC_arch_mismatch_str ;
+        case PFAC_STATUS_MUTEX_ERROR:
+            return PFAC_mutex_error ;
+        default : // PFAC_STATUS_INTERNAL_ERROR:
+            return PFAC_internal_error_str ;
     }
 }
 
