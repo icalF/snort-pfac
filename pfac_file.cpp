@@ -1,5 +1,6 @@
 #include <algorithm>
 
+#include "pfac.h"
 #include "pfac_file.h"
 #include "pfac_table.h"
 
@@ -27,8 +28,14 @@ PFAC_status_t  PFAC_readPatternFromFile( PFAC_handle_t handle, char *filename )
         PFAC_freeResource( handle );
         return PFAC_status ;
     }
+
+    int ret = pfacCompile((PFAC_STRUCT*)handle, NULL, NULL);
+    if (ret != 0)
+    {
+        return PFAC_STATUS_PATTERNS_NOT_READY;
+    }
     
-    return PFAC_prepareTable(handle);
+    return PFAC_STATUS_SUCCESS;
 }
 
 PFAC_status_t parsePatternFile( PFAC_handle_t handle, char *patternfilename )
@@ -43,29 +50,14 @@ PFAC_status_t parsePatternFile( PFAC_handle_t handle, char *patternfilename )
         return PFAC_STATUS_FILE_OPEN_ERROR;
     }
 
-    // step 1: find size of the file
-    // obtain file size
-    fseek(fpin, 0, SEEK_END);
-    int file_size = ftell(fpin);
-    handle->max_numOfStates = file_size;
-    rewind(fpin);
-
-    // step 2: allocate a buffer to contains all patterns
-    handle->valPtr = (char*)malloc(sizeof(char)*file_size);
-    if (NULL == handle->valPtr) {
-        return PFAC_STATUS_ALLOC_FAILED;
-    }
-
-    // copy the file into the buffer
-    file_size = fread(handle->valPtr, 1, file_size, fpin);
-    fclose(fpin);
-
-    handle->numOfPatterns = 10;
-
-    PFAC_status_t status = PFAC_fillPatternTable(handle);
-    if ( status != PFAC_STATUS_SUCCESS ) {
-        PFAC_PRINTF("Error: fails to PFAC_fillPatternTable, %s\n", PFAC_getErrorString(status) );
-        return status;
+    char s[12];
+    for (int i = 0; i < 10; ++i)
+    {
+        fscanf(fpin, "%s", s);
+        if (pfacAddPattern((PFAC_STRUCT*)handle, (uint8_t*)s, strlen(s), 0, 0, 0, 0, NULL, 0) != 0)
+        {
+            PFAC_PRINTF("Error: Add pattern \"%s\" failed.", s);
+        }
     }
 
     return PFAC_STATUS_SUCCESS;

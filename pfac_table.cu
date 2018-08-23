@@ -4,6 +4,7 @@
 #include <cassert>
 
 #include "pfac_table.h"
+#include <cuda_runtime.h>
 
 void printString( char *s, const int n, FILE* fp )
 {
@@ -40,21 +41,22 @@ struct pattern_cmp_functor {
     bool operator()( patternEle pattern_s, patternEle pattern_t ){
         char s_char, t_char ;
         bool s_end, t_end ;
+        int s_len = pattern_s.patternLen, t_len = pattern_t.patternLen;
         char *s_sweep = pattern_s.patternString;
         char *t_sweep = pattern_t.patternString;
 
-        while(1) {
+        for (int i = 0; ; i++) {
             s_char = *s_sweep++ ;
             t_char = *t_sweep++ ;
-            s_end = ('\n' == s_char) ;
-            t_end = ('\n' == t_char) ;
+            s_end = (i == s_len) ;
+            t_end = (i == t_len) ;
 
-            if ( s_end || t_end ){ break ; }
+            if ( s_end || t_end ) { break; }
 
-            if (s_char < t_char){
-                return true ;
-            } else if ( s_char > t_char ){
-                return false ;
+            if (s_char < t_char) {
+                return true;
+            } else if ( s_char > t_char ) {
+                return false;
             }
         }
 
@@ -88,44 +90,27 @@ PFAC_status_t PFAC_fillPatternTable ( PFAC_handle_t handle )
         return PFAC_STATUS_INVALID_PARAMETER;
     }
 
-    int max_numOfStates = handle->max_numOfStates;
+    int numOfPatterns = handle->numOfPatterns;
     char *buffer = handle->valPtr;
     vector< struct patternEle > rowIdxArray;
-    vector<int>  patternLenArray;
-    int len;
 
-    struct patternEle pEle;
-
-    pEle.patternString = buffer;
-    pEle.patternID = 1;
-
-    rowIdxArray.push_back(pEle);
-    len = 0;
-    for (int i = 0; i < max_numOfStates; i++) {
-        if (( '\n' == buffer[i] ) || ( '\0' == buffer[i]) ) {
-            if (( i > 0 ) && ( '\n' != buffer[i - 1] ) && ( '\0' != buffer[i - 1] )) { // non-empty line
-                patternLenArray.push_back(len);
-                pEle.patternString = buffer + i + 1; // start of next pattern
-                pEle.patternID = rowIdxArray.size() + 1; // ID of next pattern
-                rowIdxArray.push_back(pEle);
-            }
-            len = 0;
-        }
-        else {
-            len++;
-        }
+    PFAC_PATTERN *plist;
+    char *offset;
+    for (plist = handle->pfacPatterns, offset = buffer;
+        plist != NULL;
+        offset += plist->n + 1, plist = plist->next)
+    {
+        memcpy(offset, plist->casepatrn, plist->n);
+        rowIdxArray.push_back(patternEle(offset, 0, plist->n));
     }
 
-    // rowIdxArray.size()-1 = number of patterns
     // sort patterns by lexicographic order
-    std::sort(rowIdxArray.begin(), rowIdxArray.begin() + handle->numOfPatterns, pattern_cmp_functor());
+    std::sort(rowIdxArray.begin(), rowIdxArray.end(), pattern_cmp_functor());
 
-    handle->rowPtr = (char**)malloc(sizeof(char*)*rowIdxArray.size());
-    handle->patternID_table = (int*)malloc(sizeof(int)*rowIdxArray.size());
-    // suppose there are k patterns, then size of patternLen_table is k+1
-    // because patternLen_table[0] is useless, valid data starts from
-    // patternLen_table[1], up to patternLen_table[k]
-    handle->patternLen_table = (int*)malloc(sizeof(int)*rowIdxArray.size());
+    int rowIdxArraySize = rowIdxArray.size();
+    handle->rowPtr = (char**)malloc(sizeof(char*) * rowIdxArraySize);
+    handle->patternID_table = (int*)malloc(sizeof(int) * rowIdxArraySize);
+    handle->patternLen_table = (int*)malloc(sizeof(int) * (rowIdxArraySize + 1));
     if ((NULL == handle->rowPtr) ||
         (NULL == handle->patternID_table) ||
         (NULL == handle->patternLen_table))
@@ -134,18 +119,12 @@ PFAC_status_t PFAC_fillPatternTable ( PFAC_handle_t handle )
     }
 
     // Compute f(final state) = patternID
-    for (int i = 0; i < (rowIdxArray.size() - 1); i++) {
+    for (int i = 0; i < rowIdxArraySize; i++) {
         handle->rowPtr[i] = rowIdxArray[i].patternString;
-        handle->patternID_table[i] = rowIdxArray[i].patternID; // pattern number starts from 1
-    }
+        handle->patternID_table[i] = i + 1; // pattern number starts from 1
 
-    // although patternLen_table[0] is useless, in order to avoid errors from valgrind
-    // we need to initialize patternLen_table[0]
-    handle->patternLen_table[0] = 0;
-    for (int i = 0; i < (rowIdxArray.size() - 1); i++) {
-        // pattern (*rowPtr)[i] is terminated by character '\n'
         // pattern ID starts from 1, so patternID = i+1
-        handle->patternLen_table[i + 1] = patternLenArray[i];
+        handle->patternLen_table[i + 1] = rowIdxArray[i].patternLen;
     }
 
     return PFAC_STATUS_SUCCESS;
@@ -257,7 +236,6 @@ PFAC_status_t create_PFACTable_spaceDriven(const char** rowPtr, const int *patte
 
         for (int offset = 0; offset < len; offset++) {
             int ch = (unsigned char)pos[offset];
-            assert('\n' != ch);
 
             if ((len - 1) == offset) { // finish reading a pattern
                 TableEle ele;

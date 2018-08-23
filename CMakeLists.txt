@@ -2,18 +2,19 @@
 cmake_minimum_required (VERSION 3.9)
 project ("PFAC-CUDA" LANGUAGES CXX CUDA)
 
-#add_executable(ac ac.cpp)
+string(APPEND CMAKE_CUDA_FLAGS " -gencode arch=compute_50,code=sm_50")
 
 add_executable(playground icalcu.cu)
 
 add_executable(pfac pfac_main.cpp
+					pfac.h
 					pfac.cu
 					pfac_match.cu
+					pfac_table.h
 					pfac_table.cu
 					pfac_kernel.cu
+					pfac_file.h
 					pfac_file.cpp)
-
-#target_compile_features(ac PUBLIC cxx_std_11)
 
 target_compile_features(playground PUBLIC cxx_std_11)
 

@@ -297,6 +297,9 @@ struct PFAC_STRUCT {
 struct patternEle{
     char *patternString;
     int patternID;
+    int patternLen;
+    patternEle(char *P, int ID, int len):
+        patternString(P), patternID(ID), patternLen(len) {}
 };
 
 

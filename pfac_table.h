@@ -23,7 +23,7 @@ static void init_xlatcase ()
     int i;
     for (i = 0; i < 256; i++)
     {
-        xlatcase[i] = (unsigned char)toupper (i);
+        xlatcase[i] = (uint8_t)toupper (i);
     }
 }
 

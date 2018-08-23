@@ -4,6 +4,7 @@
 #include <cassert>
 #include <cstdio>
 #include <cstring>
+#include "pfac_table.h"
 
 int MatchFound (void * id, void *tree, int index, void *data, void *neg_list)
 {
@@ -14,8 +15,8 @@ int MatchFound (void * id, void *tree, int index, void *data, void *neg_list)
 int main(int argc, char **argv)
 {
     char dumpTableFile[] = "table.txt";
-    char inputFile[] = "D:\\Projects\\spfac-nv\\test\\data\\example_input2";
-    char patternFile[] = "D:\\Projects\\spfac-nv\\test\\pattern\\example_pattern";
+    char inputFile[] = "D:\\Projects\\pfac\\test\\data\\example_input2";
+    char patternFile[] = "D:\\Projects\\pfac\\test\\pattern\\example_pattern";
     PFAC_STRUCT *pfac;
     PFAC_status_t PFAC_status;
     int input_size;
@@ -26,7 +27,7 @@ int main(int argc, char **argv)
     pfac = pfacNew( NULL, NULL, NULL ) ;
     assert( pfac != NULL );
 
-    // step 2: read patterns and dump transition table 
+    // step 2: read patterns, compile patterns and dump transition table 
     PFAC_status = PFAC_readPatternFromFile( pfac, patternFile) ;
     if ( PFAC_STATUS_SUCCESS != PFAC_status ){
         printf("Error: fails to read pattern from file, %s\n", PFAC_getErrorString(PFAC_status) );
@@ -34,14 +35,14 @@ int main(int argc, char **argv)
     }
 
     // dump transition table 
-    // FILE *table_fp = fopen(dumpTableFile, "w");
-    // assert(NULL != table_fp);
-    // PFAC_status = PFAC_dumpTransitionTable( pfac, table_fp );
-    // fclose(table_fp);
-    // if ( PFAC_STATUS_SUCCESS != PFAC_status ) {
-    //     printf("Error: fails to dump transition table, %s\n", PFAC_getErrorString(PFAC_status));
-    //     exit(1);
-    // }
+     FILE *table_fp = fopen(dumpTableFile, "w");
+     assert(NULL != table_fp);
+     PFAC_status = PFAC_dumpTransitionTable( pfac, table_fp );
+     fclose(table_fp);
+     if ( PFAC_STATUS_SUCCESS != PFAC_status ) {
+         printf("Error: fails to dump transition table, %s\n", PFAC_getErrorString(PFAC_status));
+         exit(1);
+     }
 
     //step 3: prepare input stream
     FILE* fpin = fopen(inputFile, "rb");

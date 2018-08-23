@@ -205,9 +205,9 @@ int pfacAddPattern ( PFAC_STRUCT * p, unsigned char *pat, int n, int nocase,
 {
     PFAC_PATTERN * plist;
     plist = (PFAC_PATTERN *) calloc (1, sizeof (PFAC_PATTERN));
-    plist->patrn = (unsigned char *) calloc (1, n);
+    plist->patrn = (uint8_t *) calloc (n, 1);
     ConvertCaseEx (plist->patrn, pat, n);
-    plist->casepatrn = (unsigned char *) calloc (1, n);
+    plist->casepatrn = (uint8_t *) calloc (n, 1);
     memcpy (plist->casepatrn, pat, n);
 
     plist->udata = (PFAC_USERDATA *) calloc (1, sizeof (PFAC_USERDATA));
@@ -233,22 +233,12 @@ int pfacCompile ( PFAC_STRUCT * pfac,
         int (*build_tree)(void * id, void **existing_tree),
         int (*neg_list_func)(void *id, void **list))
 {
-    int max_numOfStates = pfac->max_numOfStates;
+    int max_numOfStates = ++pfac->max_numOfStates;
 
     // Allocate a buffer to contains all patterns
-    pfac->valPtr = (char*)malloc(sizeof(char)*max_numOfStates);
+    pfac->valPtr = (char*)calloc(max_numOfStates, sizeof( char ));
     if (NULL == pfac->valPtr) {
         return PFAC_STATUS_ALLOC_FAILED;
-    }
-
-    /* Copy all patterns into the buffer */
-    PFAC_PATTERN *plist;
-    char *offset;
-    for (plist = pfac->pfacPatterns, offset = pfac->valPtr + 1;
-         plist != NULL; 
-         offset += plist->n + 1, plist = plist->next)
-    {
-        memcpy(offset, plist->patrn, plist->n);
     }
 
     PFAC_status_t status = PFAC_fillPatternTable((PFAC_handle_t) pfac);
