@@ -32,6 +32,9 @@
 #endif
 
 
+#define MAX_BUFFER_SIZE  (1 << 27)
+
+
 using namespace std;
 
 /*
@@ -234,6 +237,9 @@ struct PFAC_STRUCT {
     // int2 *h_hashRowPtr ;
     // int2 *h_hashValPtr ;
     int  *h_tableOfInitialState ;
+    char *h_input_string;
+    int  *h_matched_result;
+    int  *h_num_matched;
     int  hash_p ; // p = 2^m + 1 
     int  hash_m ;
 
@@ -243,6 +249,9 @@ struct PFAC_STRUCT {
     // int2 *d_hashRowPtr ;
     // int2 *d_hashValPtr ;
     int  *d_tableOfInitialState ; /* 256 transition function of initial state */
+    char *d_input_string;
+    int  *d_matched_result;
+    int  *d_num_matched;
 
     size_t  numOfTableEntry ; 
     size_t  sizeOfTableEntry ; 

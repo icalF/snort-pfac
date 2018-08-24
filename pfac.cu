@@ -102,7 +102,22 @@ void  PFAC_freeTable( PFAC_handle_t handle )
     if ( NULL != handle->d_tableOfInitialState ){
         cudaFree(handle->d_tableOfInitialState);
         handle->d_tableOfInitialState = NULL ;
-    }   
+    }
+
+    if ( NULL != handle->d_input_string ){
+        cudaFree(handle->d_input_string);
+        handle->d_input_string = NULL ;
+    }
+
+    if ( NULL != handle->d_matched_result ){
+        cudaFree(handle->d_matched_result);
+        handle->d_matched_result = NULL ;
+    }
+
+    if ( NULL != handle->d_num_matched ){
+        cudaFree(handle->d_num_matched);
+        handle->d_num_matched = NULL ;
+    }
 }
 
 PFAC_status_t PFAC_tex_mutex_lock(PFAC_handle_t handle)
@@ -154,6 +169,28 @@ PFAC_status_t  PFAC_create( PFAC_handle_t handle )
     if ( NULL == handle->kernel_ptr ){
         PFAC_PRINTF("Error: cannot load PFAC_kernel_timeDriven_wrapper, error = %s\n", "" );
         return PFAC_STATUS_INTERNAL_ERROR ;
+    }   
+
+    // allocate memory for input string and result
+    // basic unit of d_input_string is integer
+    cudaError_t cuda_status1 = cudaMalloc((void **) &(handle->d_input_string),     MAX_BUFFER_SIZE*sizeof(char) );
+    cudaError_t cuda_status2 = cudaMalloc((void **) &(handle->d_matched_result),    MAX_BUFFER_SIZE*sizeof(int) );
+    cudaError_t cuda_status3 = cudaMalloc((void **) &(handle->d_num_matched),     THREAD_BLOCK_SIZE*sizeof(int) );
+    cudaError_t cuda_status4 = cudaMallocHost((void**) &(handle->h_input_string),  MAX_BUFFER_SIZE*sizeof(char) );
+    cudaError_t cuda_status5 = cudaMallocHost((void**) &(handle->h_matched_result), MAX_BUFFER_SIZE*sizeof(int) );
+    cudaError_t cuda_status6 = cudaMallocHost((void**) &(handle->h_num_matched),  THREAD_BLOCK_SIZE*sizeof(int) );
+    int *h_matched_result = (int *) malloc ( MAX_BUFFER_SIZE * sizeof(int) );
+    int *h_num_matched = (int *) malloc ( THREAD_BLOCK_SIZE * sizeof(int) );
+    if ( (cudaSuccess != cuda_status1) || (cudaSuccess != cuda_status2) || 
+         (cudaSuccess != cuda_status3) || (cudaSuccess != cuda_status4) || 
+         (cudaSuccess != cuda_status5) || (cudaSuccess != cuda_status6)){
+          if ( NULL != handle->d_input_string   ) { cudaFree(handle->d_input_string); }
+          if ( NULL != handle->d_matched_result ) { cudaFree(handle->d_matched_result); }
+          if ( NULL != handle->d_num_matched    ) { cudaFree(handle->d_num_matched); }
+          if ( NULL != handle->h_input_string   ) { cudaFree(handle->h_input_string); }
+          if ( NULL != handle->h_matched_result ) { cudaFree(handle->h_matched_result); }
+          if ( NULL != handle->h_num_matched    ) { cudaFree(handle->h_num_matched); }
+        return PFAC_STATUS_CUDA_ALLOC_FAILED;
     }
 
     return PFAC_STATUS_SUCCESS ;
@@ -262,13 +299,12 @@ int pfacSearch ( PFAC_STRUCT * pfac,unsigned char * T, int n,
         int (*Match)(void * id, void *tree, int index, void *data, void *neg_list),
         void * data, int* current_state )
 {
-    int *h_matched_result = (int *) malloc ( n * sizeof(int) );
-    int *h_num_matched = (int *) malloc ( THREAD_BLOCK_SIZE * sizeof(int) );
     int nfound = 0;
     PFAC_handle_t handle = (PFAC_handle_t) pfac;
 
-    PFAC_status_t status = PFAC_matchFromHost( handle, (char *) T, n, h_matched_result, h_num_matched ) ;
+    memcpy(handle->h_input_string, T, n*sizeof(char));
 
+    PFAC_status_t status = PFAC_matchFromHost( handle, n ) ;
     if ( status != PFAC_STATUS_SUCCESS ) {
         PFAC_PRINTF("Error: fails to PFAC_matchFromHost, %s\n", PFAC_getErrorString(status) );
         return 0;
@@ -277,7 +313,7 @@ int pfacSearch ( PFAC_STRUCT * pfac,unsigned char * T, int n,
     #pragma omp parallel for reduction (+:nfound)
     for (int i = 0; i < THREAD_BLOCK_SIZE; ++i)
     {
-        nfound += h_num_matched[i];
+        nfound += handle->h_num_matched[i];
     }
 
     return nfound;
