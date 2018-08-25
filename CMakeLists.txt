@@ -12,6 +12,7 @@ add_executable(pfac pfac_main.cpp
 					pfac_match.cu
 					pfac_table.h
 					pfac_table.cu
+					pfac_texture.cuh
 					pfac_kernel.cu
 					pfac_file.h
 					pfac_file.cpp)

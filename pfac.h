@@ -5,10 +5,6 @@
 #include <vector>
 #include <mutex>
 
-// #ifdef __cplusplus
-// extern "C" {
-// #endif   // __cplusplus
-
 /* This is missing from very old Linux libc. */
 #ifndef RTLD_NOW
 # define RTLD_NOW 2
@@ -30,7 +26,6 @@
 #if THREAD_BLOCK_SIZE != 256 
     #error THREAD_BLOCK_SIZE != 256 
 #endif
-
 
 #define MAX_BUFFER_SIZE  (1 << 27)
 
@@ -391,10 +386,6 @@ int pfacPatternCount ( PFAC_STRUCT * pfac );
 int pfacPrintDetailInfo(PFAC_STRUCT *);
 
 int pfacPrintSummaryInfo(void);
-
-// #ifdef __cplusplus
-// }
-// #endif   // __cplusplus
 
 
 #endif   // PFAC_H_

@@ -229,8 +229,13 @@ PFAC_STRUCT * pfacNew (void (*userfree)(void *p),
 void pfacFree ( PFAC_STRUCT * pfac )
 {
     PFAC_handle_t handle = (PFAC_handle_t) pfac;
-    PFAC_status_t status = PFAC_destroy( handle ) ;
-    PFAC_PRINTF("%d\n", handle);
+    PFAC_status_t status = PFAC_unbindTexture(handle);
+    if ( status != PFAC_STATUS_SUCCESS )
+    {
+        PFAC_PRINTF("Error: cannot unbind texture, error = %s\n", PFAC_getErrorString(status));
+    }
+
+    status = PFAC_destroy( handle ) ;
     if ( status != PFAC_STATUS_SUCCESS )
     {
         PFAC_PRINTF("Error: cannot deinitialize handler, error = %s\n", PFAC_getErrorString(status));

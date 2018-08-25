@@ -3,8 +3,10 @@
 #include <cstdio>
 #include <cassert>
 
-#include "pfac_table.h"
 #include <cuda_runtime.h>
+
+#include "pfac_table.h"
+#include "pfac_texture.cuh"
 
 void printString( char *s, const int n, FILE* fp )
 {
@@ -31,6 +33,9 @@ int lookup(vector< vector<TableEle> > &table, const int state, const int ch)
     }
     return TRAP_STATE;
 }
+
+textureReference *texRefTable;
+texture < int, 1, cudaReadModeElementType > tex_PFAC_table;
 
 /* Custom comparator */
 struct pattern_cmp_functor {
@@ -90,7 +95,6 @@ PFAC_status_t PFAC_fillPatternTable ( PFAC_handle_t handle )
         return PFAC_STATUS_INVALID_PARAMETER;
     }
 
-    int numOfPatterns = handle->numOfPatterns;
     char *buffer = handle->valPtr;
     vector< struct patternEle > rowIdxArray;
 
@@ -372,7 +376,93 @@ PFAC_status_t  PFAC_bindTable( PFAC_handle_t handle )
         return PFAC_status ;
     }
 
+    correctTextureMode(handle);
+    
+    bool texture_on = (PFAC_TEXTURE_ON == handle->textureMode );
+    if ( texture_on ){
+        PFAC_status = PFAC_bindTexture(handle);
+        if ( PFAC_STATUS_SUCCESS != PFAC_status ){      
+            PFAC_PRINTF("Error: cannot bind transistion table \n");
+            PFAC_unbindTexture(handle);
+            return PFAC_status ;
+        }
+    }
+
     return PFAC_STATUS_SUCCESS ;
+}
+
+PFAC_status_t PFAC_bindTexture(PFAC_handle_t handle)
+{
+    PFAC_status_t pfac_status;
+    cudaError_t cuda_status;
+        
+    // #### lock mutex, only one thread can bind texture
+    pfac_status = PFAC_tex_mutex_lock(handle);
+    if ( PFAC_STATUS_SUCCESS != pfac_status ){ 
+        return pfac_status ;
+    } 
+
+    cuda_status = cudaGetTextureReference( 
+            (const struct textureReference**)&(texRefTable), 
+            &tex_PFAC_table );
+	if ( cudaSuccess != cuda_status ){
+        PFAC_PRINTF("Error: cannot get texture reference, %s\n", cudaGetErrorString(cuda_status) );
+        return PFAC_STATUS_CUDA_ALLOC_FAILED ;
+    }
+
+    cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc<int>();
+    // set texture parameters
+    tex_PFAC_table.addressMode[0] = cudaAddressModeClamp;
+    tex_PFAC_table.addressMode[1] = cudaAddressModeClamp;
+    tex_PFAC_table.filterMode     = cudaFilterModePoint;
+    tex_PFAC_table.normalized     = 0;
+    
+    size_t offset ;
+    cuda_status = cudaBindTexture( &offset, (const struct textureReference*) texRefTable,
+        (const void*) handle->d_PFAC_table, (const struct cudaChannelFormatDesc*) &channelDesc, 
+        handle->sizeOfTableInBytes ) ;
+
+    // #### unlock mutex
+    pfac_status = PFAC_tex_mutex_unlock(handle);
+    if ( PFAC_STATUS_SUCCESS != pfac_status ){ 
+        return pfac_status ;
+    }
+
+    if ( cudaSuccess != cuda_status ){
+        PFAC_PRINTF("Error: cannot bind texture, %d bytes %s\n", handle->sizeOfTableInBytes, cudaGetErrorString(cuda_status) );
+        return PFAC_STATUS_CUDA_ALLOC_FAILED ;
+    }
+    
+   /*
+    *   we bind table to linear memory via cudaMalloc() which guaratees starting address of the table
+    *   is multiple of 256 byte, so offset must be zero.  
+    */
+    if ( 0 != offset ){
+        PFAC_PRINTF("Error: offset is not zero\n");
+        return PFAC_STATUS_INTERNAL_ERROR ;
+    }
+
+    return PFAC_STATUS_SUCCESS;
+}
+
+PFAC_status_t  PFAC_unbindTexture(PFAC_handle_t handle)
+{
+    PFAC_status_t pfac_status;
+
+    // #### lock mutex, only one thread can unbind texture
+    pfac_status = PFAC_tex_mutex_lock(handle);
+    if ( PFAC_STATUS_SUCCESS != pfac_status ){ 
+        return pfac_status ;
+    }
+    cudaUnbindTexture(texRefTable);
+    
+    // #### unlock mutex
+    pfac_status = PFAC_tex_mutex_unlock(handle);
+    if ( PFAC_STATUS_SUCCESS != pfac_status ){ 
+        return pfac_status ;
+    }
+
+    return PFAC_STATUS_SUCCESS;
 }
  
 PFAC_status_t  PFAC_create2DTable( PFAC_handle_t handle )

@@ -30,8 +30,6 @@ PFAC_status_t  PFAC_matchFromDevice( PFAC_handle_t handle, size_t input_size )
     if ( 0 == input_size ){ 
         return PFAC_STATUS_SUCCESS ;    
     }
-
-    correctTextureMode(handle);
     
     PFAC_status_t PFAC_status ;
     PFAC_status = (*(handle->kernel_ptr))( handle, handle->d_input_string, input_size, handle->d_matched_result, handle->d_num_matched );
