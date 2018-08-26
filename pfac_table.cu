@@ -397,10 +397,10 @@ PFAC_status_t PFAC_bindTexture(PFAC_handle_t handle)
     cudaError_t cuda_status;
         
     // #### lock mutex, only one thread can bind texture
-    pfac_status = PFAC_tex_mutex_lock(handle);
-    if ( PFAC_STATUS_SUCCESS != pfac_status ){ 
-        return pfac_status ;
-    } 
+    // pfac_status = PFAC_tex_mutex_lock(handle);
+    // if ( PFAC_STATUS_SUCCESS != pfac_status ){ 
+    //     return pfac_status ;
+    // } 
 
     cuda_status = cudaGetTextureReference( 
             (const struct textureReference**)&(texRefTable), 
@@ -423,10 +423,10 @@ PFAC_status_t PFAC_bindTexture(PFAC_handle_t handle)
         handle->sizeOfTableInBytes ) ;
 
     // #### unlock mutex
-    pfac_status = PFAC_tex_mutex_unlock(handle);
-    if ( PFAC_STATUS_SUCCESS != pfac_status ){ 
-        return pfac_status ;
-    }
+    // pfac_status = PFAC_tex_mutex_unlock(handle);
+    // if ( PFAC_STATUS_SUCCESS != pfac_status ){ 
+    //     return pfac_status ;
+    // }
 
     if ( cudaSuccess != cuda_status ){
         PFAC_PRINTF("Error: cannot bind texture, %d bytes %s\n", handle->sizeOfTableInBytes, cudaGetErrorString(cuda_status) );
