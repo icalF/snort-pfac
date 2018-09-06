@@ -27,6 +27,10 @@ PFAC_status_t  PFAC_readPatternFromFile( PFAC_handle_t handle, char *filename );
 
 PFAC_status_t parsePatternFile( PFAC_handle_t handle, char *patternfilename );
 
+PFAC_status_t matchFromFile( PFAC_handle_t handle, const char *filename );
+
+PFAC_status_t PFAC_elaboratePatterns(PFAC_handle_t handle);
+
 // #ifdef __cplusplus
 // }
 // #endif   // __cplusplus

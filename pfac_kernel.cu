@@ -96,7 +96,7 @@ __host__  PFAC_status_t  PFAC_kernel_timeDriven_wrapper(
     *  if maxPatternLen >= sizeof(int)*EXTRA_SIZE_PER_TB, then 
     *  there may be out-of-array bound of substring starting from 1023-th character.
     */ 
-    bool smem_on = ((4*EXTRA_SIZE_PER_TB-1) >= handle->maxPatternLen) ;
+    bool smem_on = handle->smemMode;
     bool texture_on = (PFAC_TEXTURE_ON == handle->textureMode );
 
     PFAC_PRINTF("texture on = %d\n", texture_on);

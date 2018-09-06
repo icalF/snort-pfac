@@ -2,6 +2,7 @@
 #include <cctype>
 #include <cstdio>
 #include <cassert>
+#include <cstring>
 
 #include <cuda_runtime.h>
 
@@ -376,7 +377,7 @@ PFAC_status_t  PFAC_bindTable( PFAC_handle_t handle )
         return PFAC_status ;
     }
 
-    correctTextureMode(handle);
+    // correctTextureMode(handle);
     
     bool texture_on = (PFAC_TEXTURE_ON == handle->textureMode );
     if ( texture_on ){

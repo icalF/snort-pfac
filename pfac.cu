@@ -171,27 +171,40 @@ PFAC_status_t  PFAC_create( PFAC_handle_t handle )
         return PFAC_STATUS_INTERNAL_ERROR ;
     }   
 
+    handle->smemMode = 0;       // ((4*EXTRA_SIZE_PER_TB-1) >= handle->maxPatternLen);
+    handle->pinMode = 0;
+    handle->textureMode = 0;
+
     // allocate memory for input string and result
     // basic unit of d_input_string is integer
     cudaError_t cuda_status1 = cudaMalloc((void **) &(handle->d_input_string),     MAX_BUFFER_SIZE*sizeof(char) );
     cudaError_t cuda_status2 = cudaMalloc((void **) &(handle->d_matched_result),    MAX_BUFFER_SIZE*sizeof(int) );
     cudaError_t cuda_status3 = cudaMalloc((void **) &(handle->d_num_matched),     THREAD_BLOCK_SIZE*sizeof(int) );
-    cudaError_t cuda_status4 = cudaMallocHost((void**) &(handle->h_input_string),  MAX_BUFFER_SIZE*sizeof(char) );
-    cudaError_t cuda_status5 = cudaMallocHost((void**) &(handle->h_matched_result), MAX_BUFFER_SIZE*sizeof(int) );
-    cudaError_t cuda_status6 = cudaMallocHost((void**) &(handle->h_num_matched),  THREAD_BLOCK_SIZE*sizeof(int) );
-    int *h_matched_result = (int *) malloc ( MAX_BUFFER_SIZE * sizeof(int) );
-    int *h_num_matched = (int *) malloc ( THREAD_BLOCK_SIZE * sizeof(int) );
-    if ( (cudaSuccess != cuda_status1) || (cudaSuccess != cuda_status2) || 
-         (cudaSuccess != cuda_status3) || (cudaSuccess != cuda_status4) || 
-         (cudaSuccess != cuda_status5) || (cudaSuccess != cuda_status6)){
-          if ( NULL != handle->d_input_string   ) { cudaFree(handle->d_input_string); }
-          if ( NULL != handle->d_matched_result ) { cudaFree(handle->d_matched_result); }
-          if ( NULL != handle->d_num_matched    ) { cudaFree(handle->d_num_matched); }
-          if ( NULL != handle->h_input_string   ) { cudaFree(handle->h_input_string); }
-          if ( NULL != handle->h_matched_result ) { cudaFree(handle->h_matched_result); }
-          if ( NULL != handle->h_num_matched    ) { cudaFree(handle->h_num_matched); }
-        return PFAC_STATUS_CUDA_ALLOC_FAILED;
+
+    if (handle->pinMode)
+    {
+        cudaError_t cuda_status4 = cudaMallocHost((void**) &(handle->h_input_string),  MAX_BUFFER_SIZE*sizeof(char) );
+        cudaError_t cuda_status5 = cudaMallocHost((void**) &(handle->h_matched_result), MAX_BUFFER_SIZE*sizeof(int) );
+        cudaError_t cuda_status6 = cudaMallocHost((void**) &(handle->h_num_matched),  THREAD_BLOCK_SIZE*sizeof(int) );
     }
+    else
+    {
+        handle->h_input_string = (char*) calloc( MAX_BUFFER_SIZE, sizeof(char) );
+        handle->h_matched_result = (int*) calloc( MAX_BUFFER_SIZE, sizeof(int) );
+        handle->h_num_matched = (int*) calloc( THREAD_BLOCK_SIZE, sizeof(int) );
+    }
+
+    // if ( (cudaSuccess != cuda_status1) || (cudaSuccess != cuda_status2) || 
+    //      (cudaSuccess != cuda_status3) || (cudaSuccess != cuda_status4) || 
+    //      (cudaSuccess != cuda_status5) || (cudaSuccess != cuda_status6)){
+    //       if ( NULL != handle->d_input_string   ) { cudaFree(handle->d_input_string); }
+    //       if ( NULL != handle->d_matched_result ) { cudaFree(handle->d_matched_result); }
+    //       if ( NULL != handle->d_num_matched    ) { cudaFree(handle->d_num_matched); }
+    //       if ( NULL != handle->h_input_string   ) { cudaFree(handle->h_input_string); }
+    //       if ( NULL != handle->h_matched_result ) { cudaFree(handle->h_matched_result); }
+    //       if ( NULL != handle->h_num_matched    ) { cudaFree(handle->h_num_matched); }
+    //     return PFAC_STATUS_CUDA_ALLOC_FAILED;
+    // }
 
     return PFAC_STATUS_SUCCESS ;
 }
@@ -204,7 +217,7 @@ PFAC_STRUCT * pfacNew (void (*userfree)(void *p),
 {
     PFAC_handle_t handle = (PFAC_handle_t) malloc( sizeof(PFAC_STRUCT) ) ;
     if ( handle == NULL ){
-        PFAC_PRINTF("Error: cannot initialize handler, error = %s\n", PFAC_getErrorString(PFAC_STATUS_ALLOC_FAILED));
+        PFAC_PRINTF("Error: cannot create handler, error = %s\n", PFAC_getErrorString(PFAC_STATUS_ALLOC_FAILED));
         return NULL;
     }
 
@@ -247,26 +260,27 @@ int pfacAddPattern ( PFAC_STRUCT * p, unsigned char *pat, int n, int nocase,
 {
     PFAC_PATTERN * plist;
     plist = (PFAC_PATTERN *) calloc (1, sizeof (PFAC_PATTERN));
-    plist->patrn = (uint8_t *) calloc (n, 1);
-    ConvertCaseEx (plist->patrn, pat, n);
-    plist->casepatrn = (uint8_t *) calloc (n, 1);
-    memcpy (plist->casepatrn, pat, n);
+    // plist->patrn = (uint8_t *) calloc (n, 1);
+    // ConvertCaseEx (plist->patrn, pat, n);
+    plist->casepatrn = pat;
+    // plist->casepatrn = (uint8_t *) calloc (n, 1);
+    // memcpy (plist->casepatrn, pat, n);
 
-    plist->udata = (PFAC_USERDATA *) calloc (1, sizeof (PFAC_USERDATA));
-    plist->udata->ref_count = 1;
-    plist->udata->id = id;
+    // plist->udata = (PFAC_USERDATA *) calloc (1, sizeof (PFAC_USERDATA));
+    // plist->udata->ref_count = 1;
+    // plist->udata->id = id;
 
     plist->n = n;
-    plist->nocase = nocase;
-    plist->negative = negative;
-    plist->offset = offset;
-    plist->depth = depth;
-    plist->iid = iid;
+    // plist->nocase = nocase;
+    // plist->negative = negative;
+    // plist->offset = offset;
+    // plist->depth = depth;
+    // plist->iid = iid;
     plist->next = p->pfacPatterns;
     
     p->pfacPatterns = plist;
     p->numOfPatterns++;
-    p->max_numOfStates += n + 1;
+    // p->max_numOfStates += n + 1;
     return 0;
 }
 

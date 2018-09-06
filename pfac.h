@@ -3,7 +3,7 @@
 
 #include <cstdio>
 #include <vector>
-#include <mutex>
+#include <inttypes.h>
 
 /* This is missing from very old Linux libc. */
 #ifndef RTLD_NOW
@@ -27,8 +27,7 @@
     #error THREAD_BLOCK_SIZE != 256 
 #endif
 
-#define MAX_BUFFER_SIZE  (1 << 27)
-
+#define MAX_BUFFER_SIZE  (1 << 22)
 
 using namespace std;
 
@@ -187,8 +186,6 @@ typedef struct {
 #define  CHAR_SET    256
 #define  TRAP_STATE  0xFFFFFFFF
 
-#define  FILENAME_LEN    256
-
 PFAC_status_t PFAC_tex_mutex_lock(PFAC_handle_t handle);
 
 PFAC_status_t PFAC_tex_mutex_unlock(PFAC_handle_t handle);
@@ -277,19 +274,19 @@ struct PFAC_STRUCT {
                        // numOfLeaves <= numOfFinalStates
 
     /* warpper for pthread_mutex_lock and pthread_mutex_unlock */
-    mutex  __pfac_tex_mutex;
+    // mutex  __pfac_tex_mutex;
     
     int  platform ;
     
     int  perfMode ;
     
-    int  textureMode ;
+    int textureMode;
+    int pinMode;
+    int smemMode;
     
     bool isPatternsReady ;
     
     int device_no ; // = 10*deviceProp.major + deviceProp.minor ;
-    
-    char patternFile[FILENAME_LEN] ;
 
     PFAC_PATTERN *pfacPatterns;
 

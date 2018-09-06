@@ -3,8 +3,11 @@
 
 #include <cassert>
 #include <cstdio>
+#include <string>
 #include <cstring>
 #include "pfac_table.h"
+
+#include <dirent.h>
 
 int MatchFound (void * id, void *tree, int index, void *data, void *neg_list)
 {
@@ -12,70 +15,73 @@ int MatchFound (void * id, void *tree, int index, void *data, void *neg_list)
     return 0;
 }
 
+PFAC_status_t matchFromDir(PFAC_STRUCT *pfac, char* dirpath)
+{
+    PFAC_handle_t handle = (PFAC_handle_t) pfac;
+    std::string strdir = std::string(dirpath);
+
+    DIR *dir;
+    struct dirent *ent;
+    if ((dir = opendir (dirpath)) != NULL) {
+        /* print all the files and directories within directory */
+        while ((ent = readdir (dir)) != NULL) {
+            printf("File: %s\n", ent->d_name);
+            matchFromFile(handle, (strdir + ent->d_name).c_str());
+        }        
+        closedir (dir);
+    } else {
+        printf ("Could not open directory: %s\n", dirpath);
+        return PFAC_STATUS_FILE_OPEN_ERROR;
+    }
+
+    return PFAC_STATUS_SUCCESS;
+}
+
 int main(int argc, char **argv)
 {
     char dumpTableFile[] = "table.txt";
-    char inputFile[] = "D:\\Projects\\pfac\\test\\data\\example_input2";
-    char patternFile[] = "D:\\Projects\\pfac\\test\\pattern\\example_pattern";
+    char inputDir[] = "/home/ical/projects/fyp/dump/payloads/";
+    char patternFile[] = "/home/ical/projects/fyp/dump/rules/merged";
     PFAC_STRUCT *pfac;
     PFAC_status_t PFAC_status;
     int input_size;
     char *h_inputString = NULL;
     int  *h_matched_result = NULL;
 
-    // step 1: create PFAC handle 
+    // create PFAC handle 
     pfac = pfacNew( NULL, NULL, NULL ) ;
     assert( pfac != NULL );
 
-    // step 2: read patterns, compile patterns and dump transition table 
+    // read patterns, compile patterns and dump transition table 
     PFAC_status = PFAC_readPatternFromFile( pfac, patternFile) ;
     if ( PFAC_STATUS_SUCCESS != PFAC_status ){
         printf("Error: fails to read pattern from file, %s\n", PFAC_getErrorString(PFAC_status) );
-        exit(1) ;   
+        return -1;   
+    }
+
+    PFAC_status = matchFromDir(pfac, inputDir);
+    if ( PFAC_STATUS_SUCCESS != PFAC_status ) {
+        printf("Error: fails to match from dir, %s\n", PFAC_getErrorString(PFAC_status) );
+        return -1;   
     }
 
     // dump transition table 
-     FILE *table_fp = fopen(dumpTableFile, "w");
-     assert(NULL != table_fp);
-     PFAC_status = PFAC_dumpTransitionTable( pfac, table_fp );
-     fclose(table_fp);
-     if ( PFAC_STATUS_SUCCESS != PFAC_status ) {
-         printf("Error: fails to dump transition table, %s\n", PFAC_getErrorString(PFAC_status));
-         exit(1);
-     }
+    // FILE *table_fp = fopen(dumpTableFile, "w");
+    // assert(NULL != table_fp);
+    // PFAC_status = PFAC_dumpTransitionTable( pfac, table_fp );
+    // fclose(table_fp);
+    // if ( PFAC_STATUS_SUCCESS != PFAC_status ) {
+    //     printf("Error: fails to dump transition table, %s\n", PFAC_getErrorString(PFAC_status));
+    //     return -1;
+    // }
 
-    //step 3: prepare input stream
-    FILE* fpin = fopen(inputFile, "rb");
-    assert(NULL != fpin);
-
-    // obtain file size
-    fseek(fpin, 0, SEEK_END);
-    input_size = ftell(fpin);
-    rewind(fpin);
-
-    // allocate memory to contain the whole file
-    h_inputString = (char *)malloc(sizeof(char)*input_size);
-    assert(NULL != h_inputString);
-
-    h_matched_result = (int *)malloc(sizeof(int)*input_size);
-    assert(NULL != h_matched_result);
-    memset(h_matched_result, 0, sizeof(int)*input_size);
-
-    // copy the file into the buffer
-    input_size = fread(h_inputString, 1, input_size, fpin);
-    fclose(fpin);
-
-    // step 4: run PFAC on GPU
-    int current_state = 0;           
-    int count = pfacSearch ( pfac, (unsigned char*) h_inputString, input_size, MatchFound, NULL, &current_state );
-
-    // step 5: output matched result
+    // output matched result
     // for (int i = 0; i < input_size; i++) {
     //     if (h_matched_result[i] != 0) {
     //         printf("At position %4d, match pattern %d\n", i, h_matched_result[i]);
     //     }
     // }
-    printf("Pattern found: %d\n", count);
+    // printf("Pattern found: %d\n", count);
 
     pfacFree( pfac ) ;
 
